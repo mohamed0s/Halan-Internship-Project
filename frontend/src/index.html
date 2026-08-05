@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Halan 3-Tier Enterprise Application</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-glow"></div>
+    <main class="container">
+        <div class="card glass">
+            <div class="badge">
+                <span class="pulse-dot"></span> 3-Tier Architecture Active
+            </div>
+            
+            <h1>Welcome to <span class="gradient-text">Halan Engine</span></h1>
+            <p class="subtitle">Dynamically served across Nginx presentation tier, Python backend API, and PostgreSQL volume persistence.</p>
+            
+            <div class="profile-box">
+                <div class="avatar-glow">🚀</div>
+                <div class="info">
+                    <span class="label">DATABASE RECORD (USER NAME)</span>
+                    <h2 id="userName" class="loading-shimmer">Fetching from Database...</h2>
+                </div>
+            </div>
+
+            <div class="status-grid">
+                <div class="status-card">
+                    <span class="tier-tag">TIER 1</span>
+                    <strong>Nginx Proxy</strong>
+                    <span class="status-online">Port 80</span>
+                </div>
+                <div class="status-card">
+                    <span class="tier-tag">TIER 2</span>
+                    <strong>Flask API</strong>
+                    <span class="status-online">Port 5000</span>
+                </div>
+                <div class="status-card">
+                    <span class="tier-tag">TIER 3</span>
+                    <strong>PostgreSQL</strong>
+                    <span class="status-online">Port 5432</span>
+                </div>
+            </div>
+
+            <button onclick="fetchName()" class="btn-refresh">
+                🔄 Re-query Database
+            </button>
+        </div>
+    </main>
+
+    <script>
+        async function fetchName() {
+            const nameElement = document.getElementById('userName');
+            nameElement.innerText = "Querying DB...";
+
+            try {
+                const response = await fetch('/api/name');
+                const data = await response.json();
+                if (data.status === 'success') {
+                    nameElement.innerText = data.name;
+                } else {
+                    nameElement.innerText = "Error: " + data.message;
+                }
+            } catch (err) {
+                nameElement.innerText = "API Connection Failed";
+            }
+        }
+
+        // Fetch on initial load
+        document.addEventListener('DOMContentLoaded', fetchName);
+    </script>
+</body>
+</html>
