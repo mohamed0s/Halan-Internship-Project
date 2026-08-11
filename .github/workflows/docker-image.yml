@@ -117,7 +117,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: DOCKER_USERNAME
           script: |
-            cd /home/${{ secrets.SERVER_USER }}/halan-project
+            cd /home/${{ secrets.SERVER_USER }}/Halan-Internship-Project
             export DOCKER_USERNAME=$DOCKER_USERNAME
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
