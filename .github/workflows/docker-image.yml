@@ -25,8 +25,10 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - '.github/workflows/docker-image.yml'
             frontend:
               - 'frontend/**'
+              - '.github/workflows/docker-image.yml'
 
   build-backend:
     name: Build Backend Image
