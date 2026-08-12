@@ -10,3 +10,6 @@ env/
 .vscode/
 .DS_Store
 .agents
+infra/.k8s
+docs/ci-cd-pipeline.md
+docs/k8s-architecture.md

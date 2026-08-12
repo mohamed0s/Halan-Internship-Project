@@ -1,0 +1,14 @@
+# -----------------------------------------------------------
+# Namespace: Isolates all Halan resources from default/system
+# -----------------------------------------------------------
+# WHY: Namespaces provide logical isolation. All Halan pods,
+# services, and configs live here. Makes cleanup easy
+# (kubectl delete namespace halan) and enables RBAC scoping.
+# -----------------------------------------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: halan
+  labels:
+    app.kubernetes.io/part-of: halan
+    app.kubernetes.io/managed-by: kubectl
