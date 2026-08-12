@@ -61,27 +61,31 @@ jobs:
             type=semver,pattern={{version}}
             type=sha,format=short
 
-      - name: Build and push Backend Docker image
+      - name: Build and load Backend Docker image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
-      - name: Run Trivy vulnerability scanner (Backend)
-        if: github.event_name != 'pull_request'
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: '${{ secrets.DOCKER_USERNAME }}/halan-backend:${{ steps.meta.outputs.version }}'
           format: 'table'
-          exit-code: '0' # Set to '1' later to block deployments on CRITICAL/HIGH vulnerabilities
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+
+      - name: Push Backend Docker image to Docker Hub
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push --all-tags ${{ secrets.DOCKER_USERNAME }}/halan-backend
 
   build-frontend:
     name: Build Frontend Image
@@ -114,27 +118,31 @@ jobs:
             type=semver,pattern={{version}}
             type=sha,format=short
 
-      - name: Build and push Frontend Docker image
+      - name: Build and load Frontend Docker image
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-      - name: Run Trivy vulnerability scanner (Frontend)
-        if: github.event_name != 'pull_request'
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: '${{ secrets.DOCKER_USERNAME }}/halan-frontend:${{ steps.meta.outputs.version }}'
           format: 'table'
-          exit-code: '0' # Set to '1' later to block deployments on CRITICAL/HIGH vulnerabilities
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+
+      - name: Push Frontend Docker image to Docker Hub
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push --all-tags ${{ secrets.DOCKER_USERNAME }}/halan-frontend
 
   deploy:
     name: Deploy to Server via SSH
@@ -175,3 +183,16 @@ jobs:
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
             docker image prune -af
+
+  health-check:
+    name: Post-Deployment HTTP Health Check
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check application health
+        run: |
+          echo "Waiting for containers to start..."
+          sleep 10
+          echo "Checking HTTP response from server..."
+          curl -f --retry 5 --retry-delay 5 --retry-connrefused http://${{ secrets.SERVER_HOST }} || exit 1
+          echo "Health check passed!"
