@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: halan-ingress
+  namespace: halan
+spec:
+  ingressClassName: nginx   # tells K8s which Ingress Controller to use
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: halan-nginx   #
+                port:
+                  number: 80 

@@ -1,6 +1,6 @@
 replicaCount: 2 
 service:
-  type: NodePort
+  type: ClusterIP  
 autoscaling:
   enabled: true
   minReplicas: 2
