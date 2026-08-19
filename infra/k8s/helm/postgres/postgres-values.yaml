@@ -2,7 +2,7 @@
 architecture: replication # Enables Primary + Read-Replica setup
 
 auth:
-  database: db
+  database: halandb
   username: pguser
   existingSecret: halan-db-secret
 

@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: halan-backend
+  name: halan-backend
+  namespace: halan
+
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: halan-backend
+
+  template:
+    metadata:
+      labels:
+        app: halan-backend
+    spec:
+      containers:
+      - image: mohamedosa/halan-backend
+        name: halan-backend
+        
+        ports:
+        - containerPort: 5000
+
+        envFrom:
+          - configMapRef:
+              name: backend-config   # Loads DB_HOST, DB_PORT, DB_NAME, DB_USER
+        env:
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: halan-db-secret
+                key: password        # ONLY this key
+        
+        
+        resources:
+          requests:
+            cpu: "100m"     # Guaranteed minimum CPU
+            memory: "128Mi" # Guaranteed minimum RAM
+          limits:
+            cpu: "250m"     # Hard cap — process gets throttled, NOT killed
+            memory: "256Mi" # Hard cap — if exceeded, pod is OOMKilled
+
+            
+        livenessProbe:
+          httpGet:
+            path: /health         # Hit the root endpoint
+            port: 5000
+          initialDelaySeconds: 15  # Wait 15s for Flask to start before checking
+          periodSeconds: 20        # Check every 20s
+          failureThreshold: 3      # Kill and restart the pod after 3 failures
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5   # Faster — just check if it can handle traffic
+          periodSeconds: 10
+          failureThreshold: 3      # Remove from Service load balancer after 3 failures
+        

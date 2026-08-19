@@ -14,6 +14,14 @@ def get_db_connection():
       port=os.environ.get("DB_PORT", "5432"),
   )
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "healthy"}), 200
+
+
+
+
+
 
 @app.route("/")
 @app.route("/api/name")

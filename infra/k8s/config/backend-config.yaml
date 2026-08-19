@@ -1,0 +1,11 @@
+# infra/k8s/config/backend-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: halan
+data:
+  DB_HOST: "halan-db-postgresql-primary"
+  DB_PORT: "5432"
+  DB_NAME: "halandb"
+  DB_USER: "pguser"
