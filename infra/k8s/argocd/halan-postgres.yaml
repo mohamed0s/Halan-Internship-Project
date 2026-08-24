@@ -5,13 +5,20 @@ metadata:
   namespace: argocd
 spec:
   project: default
-  source:
-    repoURL: https://charts.bitnami.com/bitnami
-    chart: postgresql
-    targetRevision: "15.5.0"
-    helm:
-      valueFiles:
-        - https://raw.githubusercontent.com/mohamed0s/Halan-Internship-Project/HEAD/infra/k8s/helm/postgres/postgres-values.yaml
+  sources:
+    # Source 1: The actual Bitnami PostgreSQL chart (from Bitnami's Helm repo)
+    - repoURL: https://charts.bitnami.com/bitnami
+      chart: postgresql
+      targetRevision: "18.8.12"
+      helm:
+        # $values is a reference to Source 2 below — ArgoCD resolves it at sync time
+        valueFiles:
+          - $values/infra/k8s/helm/postgres/postgres-values.yaml
+
+    # Source 2: Your Git repo — used ONLY to load values files, not to apply any YAML
+    - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
+      targetRevision: HEAD
+      ref: values   # This names the source "$values" for the reference above
   destination:
     server: https://kubernetes.default.svc
     namespace: halan

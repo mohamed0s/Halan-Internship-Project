@@ -11,6 +11,7 @@ spec:
     path: infra/k8s
     directory:
       recurse: false
+      exclude: "job.yaml"  # Exclude one-shot DB migration — managed via bootstrap only
   destination:
     server: https://kubernetes.default.svc
     namespace: halan

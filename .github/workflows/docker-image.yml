@@ -144,55 +144,76 @@ jobs:
         run: |
           docker push --all-tags ${{ secrets.DOCKER_USERNAME }}/halan-frontend
 
-  deploy:
-    name: Deploy to Server via SSH
+  # -----------------------------------------------------------------------
+  # CD: Update image tag in Git → ArgoCD detects change → deploys to K8s
+  # This is the GitOps "image updater" pattern.
+  # GitHub Actions no longer SSHes into anything. It only writes to Git.
+  # -----------------------------------------------------------------------
+  update-image-tag:
+    name: Update Backend Image Tag (GitOps)
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend]
+    # Only runs after a successful backend build, and only on pushes to main (not PRs)
+    needs: [build-backend]
     if: |
-      always() && 
-      (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped') &&
-      (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped') &&
+      needs.build-backend.result == 'success' &&
       github.event_name != 'pull_request'
+    # Grant the GITHUB_TOKEN permission to push commits back to this repo
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Copy docker-compose.prod.yml to Server
-        uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.prod.yml"
-          target: "/home/${{ secrets.SERVER_USER }}/Halan-Internship-Project"
+          # Fetch the full history so git can push cleanly
+          fetch-depth: 0
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: DOCKER_USERNAME
-          script: |
-            cd /home/${{ secrets.SERVER_USER }}/Halan-Internship-Project
-            export DOCKER_USERNAME=$DOCKER_USERNAME
-            docker compose -f docker-compose.prod.yml down
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
-            docker image prune -af
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
-  health-check:
-    name: Post-Deployment HTTP Health Check
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check application health
+      - name: Update image tag in Helm values
         run: |
-          echo "Waiting for containers to start..."
-          sleep 10
-          echo "Checking HTTP response from server..."
-          curl -f --retry 5 --retry-delay 5 --retry-connrefused http://${{ secrets.SERVER_HOST }} || exit 1
-          echo "Health check passed!"
+          sed -i 's/tag: .*/tag: "sha-${{ steps.sha.outputs.short }}"/' \
+            infra/k8s/helm/backend/values.yaml
+
+      - name: Commit and push updated values.yaml
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add infra/k8s/helm/backend/values.yaml
+          git commit -m "ci: update backend image tag to sha-${{ steps.sha.outputs.short }} [skip ci]"
+          git push
+
+  update-frontend-image-tag:
+    name: Update Frontend Image Tag (GitOps)
+    runs-on: ubuntu-latest
+    needs: [build-frontend]
+    if: |
+      needs.build-frontend.result == 'success' &&
+      github.event_name != 'pull_request'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Update image tag in Nginx Helm values
+        run: |
+          sed -i 's/tag: .*/tag: "sha-${{ steps.sha.outputs.short }}"/' \
+            infra/k8s/helm/nginx/nginx-values.yaml
+
+      - name: Commit and push updated nginx-values.yaml
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add infra/k8s/helm/nginx/nginx-values.yaml
+          git commit -m "ci: update frontend image tag to sha-${{ steps.sha.outputs.short }} [skip ci]"
+          git push
