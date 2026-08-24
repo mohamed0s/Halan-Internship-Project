@@ -1,0 +1,29 @@
+appName: halan-backend
+replicaCount: 3
+
+image:
+  repository: mohamedosa/halan-backend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 5000
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 50
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "250m"
+    memory: "256Mi"
+
+# We can keep some config references static since they belong to shared cluster infra
+configMapName: backend-config
+secretName: halan-db-secret

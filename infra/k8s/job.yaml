@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration-job
+  namespace: halan
+spec:
+  template:
+    metadata: {}
+    spec:
+      containers:
+      - image: busybox:latest
+        name: db-migration-job
+        resources: {}
+      restartPolicy: Never
+status: {}

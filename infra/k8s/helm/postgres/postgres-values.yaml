@@ -10,7 +10,7 @@ primary:
   persistence:
     enabled: true
     size: 8Gi
-    storageClass: "standard" # Explicitly set to avoid relying on hidden defaults!
+    storageClass: "longhorn" # Switched to longhorn for production storage
     # TODO (Phase 15.1): Change 'standard' to 'longhorn' when migrating to RKE
 
 readReplicas:
@@ -18,4 +18,4 @@ readReplicas:
   persistence:
     enabled: true
     size: 8Gi
-    storageClass: "standard"
+    storageClass: "longhorn"
