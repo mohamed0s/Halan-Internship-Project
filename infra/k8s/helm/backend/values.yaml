@@ -3,7 +3,7 @@ replicaCount: 3
 
 image:
   repository: mohamedosa/halan-backend
-  tag: "latest"
+  tag: "sha-433b85c"
   pullPolicy: IfNotPresent
 
 service:
