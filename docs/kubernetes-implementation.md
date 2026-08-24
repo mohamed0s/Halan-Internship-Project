@@ -1,36 +1,36 @@
-# Kubernetes Implementation Documentation
+# Kubernetes Implementation — Architecture & Runbook
 
-This document summarizes the transition from Docker Compose to a fully production-ready Kubernetes architecture (Phases 1 through 13).
+This document captures the complete Kubernetes deployment architecture for the Halan Internship Project, reflecting the actual current state of `infra/k8s/`.
 
 ---
 
 ## 🏛️ Architecture Overview
 
-The system is deployed in the `halan` namespace and utilizes a 3-tier microservices architecture consisting of a Frontend (Nginx), Backend (Flask), and Database (PostgreSQL).
+The system runs in the `halan` namespace across a 3-tier microservices architecture. All external traffic enters through a single Nginx Ingress Controller and flows down to the appropriate backend services.
 
 ```mermaid
 graph TD
     User([Internet / User])
-    Ingress[Nginx Ingress Controller\nCatch-all Route]
-    
+    Ingress[Nginx Ingress Controller<br/>Cluster-Level L7 Routing]
+
     subgraph K8s Cluster [Kubernetes Cluster]
-        subgraph Namespace [Namespace: halan]
-            SvcNginx[Service: halan-nginx\nClusterIP: 80]
-            PodNginx[Pods: halan-nginx\nPort: 8080\n2-5 Replicas]
-            
-            SvcBackend[Service: halan-backend-service\nClusterIP: 5000]
-            PodBackend[Pods: halan-backend\nPort: 5000\n2-6 Replicas]
-            
-            SvcDB[Service: halan-db-postgresql-primary\nClusterIP: 5432]
-            PodDB[(Pod: halan-db-postgresql-0\nStatefulSet)]
+        subgraph NS [Namespace: halan]
+            SvcNginx[Service: halan-nginx<br/>ClusterIP: 80]
+            PodNginx[Pods: halan-nginx<br/>Port: 8080<br/>2–5 Replicas via HPA]
+
+            SvcBackend[Service: halan-backend<br/>ClusterIP: 5000]
+            PodBackend[Pods: halan-backend<br/>Port: 5000<br/>2–6 Replicas via HPA]
+
+            SvcDB[Service: halan-db-postgresql-primary<br/>ClusterIP: 5432]
+            PodDB[(StatefulSet: halan-db-postgresql-0<br/>Primary + Read Replica)]
         end
     end
 
-    User -->|http://192.168.49.2/| Ingress
-    Ingress -->|Forwards to| SvcNginx
-    SvcNginx -->|Load Balances| PodNginx
+    User -->|HTTP| Ingress
+    Ingress -->|path: /| SvcNginx
+    SvcNginx --> PodNginx
     PodNginx -->|Reverse Proxy /api/| SvcBackend
-    SvcBackend -->|Load Balances| PodBackend
+    SvcBackend --> PodBackend
     PodBackend -->|Reads/Writes| SvcDB
     SvcDB --> PodDB
 ```
@@ -39,47 +39,113 @@ graph TD
 
 ## 📦 Component Breakdown
 
-### 1. The Frontend (Nginx)
-- **Deployment Method:** Bitnami Helm Chart (`bitnami/nginx`)
-- **Key Configurations:**
-  - Non-root execution (listening on port 8080 internally).
-  - Reverse Proxy configured via `serverBlock` in `nginx-values.yaml` to forward `/api/` traffic to the backend.
-  - Exposed virtually on port 80 via the `halan-nginx` ClusterIP Service.
+### 1. Frontend — Nginx
+- **Deployment method:** Bitnami `bitnami/nginx` Helm chart
+- **Chart values:** `infra/k8s/helm/nginx/nginx-values.yaml`
+- **Key config:**
+  - Runs non-root on port `8080` internally
+  - Custom `serverBlock` in values configures Nginx as a reverse proxy: all `/api/` requests are forwarded to `halan-backend:5000`
+  - HPA managed directly via Helm values (`autoscaling.enabled: true`)
+  - Exposed internally via ClusterIP Service
 
-### 2. The Backend (Python Flask)
-- **Deployment Method:** Custom Kubernetes Deployment (`backend-deployment.yaml`)
-- **Security:** Runs as a non-root user (`appuser`).
-- **Configuration & Secrets:**
-  - Database credentials injected securely via K8s `Secret`.
-  - Environment variables injected via K8s `ConfigMap`.
-- **Health Checks:**
-  - `livenessProbe` checks `/health` every 20s to restart frozen pods.
-  - `readinessProbe` checks `/health` every 10s to ensure traffic is only sent to ready pods.
-- **Resource Management:**
-  - Requests: `100m CPU`, `128Mi RAM` (Guaranteed minimums).
-  - Limits: `250m CPU`, `256Mi RAM` (Hard caps to prevent node starvation/OOM).
+### 2. Backend — Python Flask
+- **Deployment method:** Custom Helm chart at `infra/k8s/helm/backend/`
+- **Chart structure:**
+  ```text
+  helm/backend/
+  ├── Chart.yaml          ← Chart identity & version
+  ├── values.yaml         ← All configurable parameters
+  └── templates/
+      ├── deployment.yaml ← Pod spec with health probes & resource limits
+      ├── service.yaml    ← ClusterIP Service to expose the backend
+      └── hpa.yaml        ← HPA (conditional on autoscaling.enabled)
+  ```
+- **Configuration injection:**
+  - Non-sensitive env vars (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`) loaded from `ConfigMap: backend-config`
+  - Database password loaded from `Secret: halan-db-secret`
+- **Health probes:**
+  - `livenessProbe` — polls `GET /health` every 20s; restarts pod after 3 failures
+  - `readinessProbe` — polls `GET /health` every 10s; removes pod from Service endpoints after 3 failures
+- **Resource management:**
+  - Requests: `100m CPU`, `128Mi RAM`
+  - Limits: `250m CPU`, `256Mi RAM`
+- **HPA:** Scales between 2 and 6 replicas when average CPU exceeds 50% of requests
 
-### 3. The Database (PostgreSQL)
-- **Deployment Method:** Bitnami Helm Chart (`bitnami/postgresql`)
-- **Architecture:** Deployed as a `StatefulSet` to ensure data persistence and stable network identity (`halan-db-postgresql-primary-0`).
-- **Storage:** Backed by a Persistent Volume Claim (PVC) using the `standard` storage class (ready to be swapped to `longhorn` in Phase 15).
+### 3. Database — PostgreSQL
+- **Deployment method:** Bitnami `bitnami/postgresql` Helm chart
+- **Chart values:** `infra/k8s/helm/postgres/postgres-values.yaml`
+- **Architecture:** `replication` mode — 1 Primary StatefulSet pod + 2 Read Replica pods
+- **Storage:** PVC backed by `longhorn` StorageClass (use `standard` on Minikube)
+- **Credentials:** Pulled from pre-existing Secret `halan-db-secret`
+- **Why StatefulSet?** Each pod gets a stable DNS name (`halan-db-postgresql-primary-0`), its own PVC that survives restarts, and ordered startup/shutdown for safe replica election.
 
 ---
 
-## ⚙️ Advanced Features Implemented
+## ⚙️ Standalone Cluster Resources
 
-### 1. L7 Ingress Controller
-We completely removed `NodePort` in favor of an **Nginx Ingress Controller**. 
-- It acts as the single public entry point for the entire cluster.
-- Routes traffic natively to the internal `ClusterIP` services.
+These resources are **not** managed by any Helm chart because their lifecycle is independent of any single service.
 
-### 2. Horizontal Pod Autoscaling (HPA)
-Both the Frontend and Backend are dynamically autoscaled based on CPU utilization.
-- **Backend HPA:** Scales between 2 and 6 replicas if average CPU exceeds 50%.
-- **Frontend HPA:** Scales between 2 and 5 replicas (managed directly via Helm values).
-- The HPA replaces static replica counts, allowing the cluster to respond to traffic spikes and scale down during quiet periods to save resources.
+| File | Resource | Reason for being standalone |
+|:-----|:---------|:---------------------------|
+| `namespace.yaml` | Namespace `halan` | Bootstrap resource — must exist before everything else |
+| `config/backend-config.yaml` | ConfigMap | Shared app config, not owned by any one service chart |
+| `config/secrets.yaml` | Secret | Sensitive credentials — managed separately (use Vault/Sealed Secrets in prod) |
+| `ingress.yaml` | Ingress | Cluster-level routing — grows independently as new services are added |
+| `job.yaml` | Job | One-off database migration — lifecycle independent of backend deployments |
+| `cronjob.yaml` | CronJob | Scheduled cluster task — not tied to any service release cycle |
 
-### 3. Internal CoreDNS Resolution
-No IP addresses are hardcoded. Microservices discover each other using Kubernetes internal DNS:
-- Nginx finds Flask via `http://halan-backend-service:5000`
-- Flask finds Postgres via `halan-db-postgresql-primary`
+---
+
+## 🔀 Helm Release Summary
+
+| Release Name | Chart | Namespace | Values File |
+|:-------------|:------|:----------|:------------|
+| `halan-nginx` | `bitnami/nginx` | `halan` | `helm/nginx/nginx-values.yaml` |
+| `halan-db` | `bitnami/postgresql` | `halan` | `helm/postgres/postgres-values.yaml` |
+| `halan-backend` | `./helm/backend` (custom) | `halan` | `helm/backend/values.yaml` |
+| `argocd` | `argo/argo-cd` | `argocd` | default |
+
+---
+
+## 🌐 Internal Service Discovery (CoreDNS)
+
+No IP addresses are hardcoded anywhere. All inter-service communication uses Kubernetes DNS:
+
+| From | To | DNS Name |
+|:-----|:---|:---------|
+| Nginx pod | Flask backend | `http://halan-backend:5000` |
+| Flask pod | PostgreSQL | `halan-db-postgresql-primary:5432` |
+
+---
+
+## ♻️ GitOps with ArgoCD (Phase 13)
+
+ArgoCD runs in the `argocd` namespace and continuously reconciles the cluster state with this Git repository.
+
+**Self-healing behavior:** If someone manually runs `kubectl edit` or `kubectl scale` to change a resource, ArgoCD detects the **drift** between Git (source of truth) and the cluster, and automatically reverts the change back to what is defined in Git.
+
+**Workflow after ArgoCD is set up:**
+```
+Developer pushes code
+       ↓
+GitHub Actions builds & pushes Docker image to DockerHub
+       ↓
+Developer updates image tag in helm/backend/values.yaml and pushes to Git
+       ↓
+ArgoCD detects Git change → syncs cluster → rolling update begins
+       ↓
+Zero-downtime deployment complete
+```
+
+> **Note:** `infra/k8s/deploy.sh` is a **bootstrap-only** script used for the initial cluster setup. After ArgoCD is configured, it is no longer needed for application deployments.
+
+---
+
+## 🔒 Security Notes
+
+| Topic | Current Approach | Production Recommendation |
+|:------|:----------------|:--------------------------|
+| Database credentials | `config/secrets.yaml` (plaintext in Git) | HashiCorp Vault or Bitnami Sealed Secrets |
+| Container privileges | Non-root user (`appuser`) in Docker image | ✅ Already production-ready |
+| Network isolation | All services on `ClusterIP` — only Ingress is externally reachable | ✅ Already production-ready |
+| TLS termination | Not yet configured | Add cert-manager + Let's Encrypt Ingress annotations |

@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: halan-backend
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/mohamed0s/Halan-Internship-Project
+    targetRevision: HEAD
+    path: infra/k8s/helm/backend
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: halan
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
