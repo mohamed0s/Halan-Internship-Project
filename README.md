@@ -9,10 +9,10 @@ A cloud-native, 3-tier enterprise application deployed on Kubernetes using Helm 
 ```text
 halan-internship-project/
 ├── .github/
-│   └── workflows/                   # CI: builds and pushes Docker images to DockerHub
+│   └── workflows/                   # CI: builds images, scans, and updates image tags in Git
 ├── docs/                            # Technical documentation & runbooks
 │   ├── architecture.md              # Docker-era system architecture
-│   ├── kubernetes-implementation.md # Kubernetes deployment documentation
+│   ├── kubernetes-implementation.md # Kubernetes deployment & GitOps documentation
 │   ├── k8s-architecture.md          # Migration plan & design decisions
 │   └── ci-cd-pipeline.md            # CI/CD pipeline documentation
 ├── frontend/                        # Nginx web server + HTML/CSS UI
@@ -22,23 +22,28 @@ halan-internship-project/
 │   ├── terraform/                   # AWS infrastructure (VPC, EKS, RDS)
 │   └── k8s/                         # All Kubernetes manifests & Helm values
 │       ├── namespace.yaml           # Cluster namespace definition
-│       ├── ingress.yaml             # Cluster-level L7 routing (standalone)
-│       ├── job.yaml                 # One-off database migration job
-│       ├── cronjob.yaml             # Recurring scheduled task
+│       ├── ingress.yaml             # Cluster-level L7 routing (managed by ArgoCD)
+│       ├── job.yaml                 # One-off database migration (bootstrap only)
+│       ├── cronjob.yaml             # Recurring scheduled task (managed by ArgoCD)
+│       ├── bootstrap.sh             # One-time cluster setup script
+│       ├── argocd/                  # ArgoCD App of Apps — one file per service
+│       │   ├── halan-infra.yaml     # Manages raw K8s manifests
+│       │   ├── halan-backend.yaml   # Manages custom Flask Helm chart
+│       │   ├── halan-nginx.yaml     # Manages Bitnami Nginx chart
+│       │   └── halan-postgres.yaml  # Manages Bitnami PostgreSQL chart
 │       ├── config/
 │       │   ├── backend-config.yaml  # Non-sensitive ConfigMap (DB_HOST, DB_PORT, etc.)
 │       │   └── secrets.yaml         # Database credentials (use Vault/Sealed Secrets in prod)
-│       ├── helm/
-│       │   ├── nginx/               # Bitnami Nginx chart values (frontend)
-│       │   ├── postgres/            # Bitnami PostgreSQL chart values (database)
-│       │   └── backend/             # Custom Helm chart for Flask backend
-│       │       ├── Chart.yaml
-│       │       ├── values.yaml
-│       │       └── templates/
-│       │           ├── deployment.yaml
-│       │           ├── service.yaml
-│       │           └── hpa.yaml
-│       └── deploy.sh                # Bootstrap script (first-time cluster setup only)
+│       └── helm/
+│           ├── nginx/               # Bitnami Nginx chart values (frontend)
+│           ├── postgres/            # Bitnami PostgreSQL chart values (database)
+│           └── backend/             # Custom Helm chart for Flask backend
+│               ├── Chart.yaml
+│               ├── values.yaml
+│               └── templates/
+│                   ├── deployment.yaml
+│                   ├── service.yaml
+│                   └── hpa.yaml
 ├── monitoring/                      # Prometheus & Grafana configs
 ├── docker-compose.yml               # Local development environment
 └── .env.example                     # Required environment variable reference
@@ -134,7 +139,7 @@ helm repo update
 
 ### Step 4 — Bootstrap the Cluster
 
-Run the bootstrap script from the `infra/k8s/` directory. This is the **only time** you run this script. After ArgoCD is set up, it takes over all deployments.
+Run the bootstrap script from the `infra/k8s/` directory. This is the **only time** you run this script. After ArgoCD takes over, all deployments are automatic.
 
 ```bash
 cd infra/k8s/
@@ -145,25 +150,14 @@ kubectl apply -f namespace.yaml
 # Apply ConfigMaps and Secrets (database credentials & app config)
 kubectl apply -f config/
 
-# Deploy PostgreSQL (Primary + Read Replica via StatefulSet)
-helm upgrade --install halan-db helm/postgres/postgresql-18.8.12.tgz \
-  -f helm/postgres/postgres-values.yaml -n halan
-
-# Deploy Nginx frontend
-helm upgrade --install halan-nginx helm/nginx/nginx-25.0.21.tgz \
-  -f helm/nginx/nginx-values.yaml -n halan
-
-# Deploy the Flask backend (custom Helm chart)
-helm upgrade --install halan-backend helm/backend/ \
-  -f helm/backend/values.yaml -n halan
-
-# Apply cluster-level routing
-kubectl apply -f ingress.yaml
-
-# Apply batch jobs
+# Run the one-shot DB migration job
 kubectl apply -f job.yaml
-kubectl apply -f cronjob.yaml
+
+# Hand over control to ArgoCD — it deploys everything from here
+kubectl apply -f argocd/
 ```
+
+ArgoCD will immediately begin syncing all 4 applications from Git.
 
 ---
 
@@ -200,7 +194,7 @@ curl http://$MINIKUBE_IP/api/name
 
 ### Step 7 — Set Up ArgoCD (GitOps)
 
-After the initial bootstrap, ArgoCD takes over all future deployments.
+ArgoCD is already configured if you used `bootstrap.sh`. Once applied, it takes over all future deployments automatically.
 
 ```bash
 # Install ArgoCD
@@ -215,13 +209,16 @@ kubectl get pods -n argocd -w
 kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath="{.data.password}" | base64 -d; echo
 
-# Access the ArgoCD UI
-kubectl port-forward svc/argocd-server -n argocd 8080:443
-# Open https://localhost:8080 (accept the self-signed cert warning)
+# Expose the ArgoCD UI to your external IP
+kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443
+# Open https://<YOUR_SERVER_IP>:8080
 # Username: admin | Password: from the command above
+
+# Apply all 4 ArgoCD Application manifests
+kubectl apply -f infra/k8s/argocd/
 ```
 
-Once logged in, connect this GitHub repository to ArgoCD and apply the ArgoCD Application manifest to enable fully automated GitOps deployments.
+Once applied, ArgoCD polls this repository every 3 minutes and automatically deploys any Git change.
 
 ---
 
@@ -263,7 +260,7 @@ Once logged in, connect this GitHub repository to ArgoCD and apply the ArgoCD Ap
 - [x] **Phase 10**: Persistent Volumes (PostgreSQL StatefulSet + PVC)
 - [x] **Phase 11**: Jobs & CronJobs
 - [x] **Phase 12**: Ingress (L7 routing)
-- [ ] **Phase 13**: ArgoCD (GitOps continuous delivery)
+- [x] **Phase 13**: ArgoCD GitOps — App of Apps pattern, multi-source Helm, automated image tag updates
 - [ ] **Phase 14**: ELK Stack (centralized logging)
 - [ ] **Phase 15**: Service Mesh (Linkerd + distributed tracing)
 - [ ] **Phase 16**: Prometheus & Grafana observability

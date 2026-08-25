@@ -85,25 +85,29 @@ graph TD
 
 These resources are **not** managed by any Helm chart because their lifecycle is independent of any single service.
 
-| File | Resource | Reason for being standalone |
-|:-----|:---------|:---------------------------|
-| `namespace.yaml` | Namespace `halan` | Bootstrap resource — must exist before everything else |
-| `config/backend-config.yaml` | ConfigMap | Shared app config, not owned by any one service chart |
-| `config/secrets.yaml` | Secret | Sensitive credentials — managed separately (use Vault/Sealed Secrets in prod) |
-| `ingress.yaml` | Ingress | Cluster-level routing — grows independently as new services are added |
-| `job.yaml` | Job | One-off database migration — lifecycle independent of backend deployments |
-| `cronjob.yaml` | CronJob | Scheduled cluster task — not tied to any service release cycle |
+| File | Resource | Managed by ArgoCD? | Reason |
+|:-----|:---------|:-------------------|:-------|
+| `namespace.yaml` | Namespace `halan` | ✅ `halan-infra` | Bootstrap resource — must exist before everything else |
+| `config/backend-config.yaml` | ConfigMap | ❌ Bootstrap only | Shared app config — applied once via `bootstrap.sh` |
+| `config/secrets.yaml` | Secret | ❌ Bootstrap only | Sensitive credentials — human-managed (use Vault/Sealed Secrets in prod) |
+| `ingress.yaml` | Ingress | ✅ `halan-infra` | Cluster-level routing — grows independently as new services are added |
+| `job.yaml` | Job | ❌ Excluded | One-off DB migration — excluded from ArgoCD via `directory.exclude` to avoid `Degraded` state after completion |
+| `cronjob.yaml` | CronJob | ✅ `halan-infra` | Recurring schedule — long-lived resource, safe for ArgoCD to reconcile |
 
 ---
 
-## 🔀 Helm Release Summary
+## 🔀 ArgoCD Application Summary
 
-| Release Name | Chart | Namespace | Values File |
-|:-------------|:------|:----------|:------------|
-| `halan-nginx` | `bitnami/nginx` | `halan` | `helm/nginx/nginx-values.yaml` |
-| `halan-db` | `bitnami/postgresql` | `halan` | `helm/postgres/postgres-values.yaml` |
-| `halan-backend` | `./helm/backend` (custom) | `halan` | `helm/backend/values.yaml` |
-| `argocd` | `argo/argo-cd` | `argocd` | default |
+All releases are managed by ArgoCD via `infra/k8s/argocd/`. These files are applied once during bootstrap; after that ArgoCD takes full control.
+
+| ArgoCD App | Chart Source | Chart | Values File | Namespace |
+|:-----------|:------------|:------|:------------|:----------|
+| `halan-nginx` | Bitnami (remote) | `bitnami/nginx@25.0.21` | `helm/nginx/nginx-values.yaml` | `halan` |
+| `halan-postgres` | Bitnami (remote) | `bitnami/postgresql@18.8.12` | `helm/postgres/postgres-values.yaml` | `halan` |
+| `halan-backend` | Git (local) | `helm/backend/` (custom) | `helm/backend/values.yaml` | `halan` |
+| `halan-infra` | Git (local) | Raw YAML directory | `infra/k8s/` | `halan` |
+
+> **Multi-source Apps**: `halan-nginx` and `halan-postgres` use the ArgoCD [multi-source pattern](https://argo-cd.readthedocs.io/en/stable/user-guide/multiple_sources/) — chart from Bitnami, values from this Git repo.
 
 ---
 
@@ -120,24 +124,40 @@ No IP addresses are hardcoded anywhere. All inter-service communication uses Kub
 
 ## ♻️ GitOps with ArgoCD (Phase 13)
 
-ArgoCD runs in the `argocd` namespace and continuously reconciles the cluster state with this Git repository.
+ArgoCD runs in the `argocd` namespace and continuously reconciles the cluster state with this Git repository using an **App of Apps** pattern — one `Application` resource per service, each defined in `infra/k8s/argocd/`.
 
-**Self-healing behavior:** If someone manually runs `kubectl edit` or `kubectl scale` to change a resource, ArgoCD detects the **drift** between Git (source of truth) and the cluster, and automatically reverts the change back to what is defined in Git.
+**Self-healing behavior:** If someone manually runs `kubectl edit` or `kubectl scale`, ArgoCD detects the **drift** between Git (source of truth) and the cluster, and automatically reverts the change within minutes.
 
-**Workflow after ArgoCD is set up:**
+**Full GitOps loop:**
 ```
-Developer pushes code
+Developer pushes code to main
        ↓
-GitHub Actions builds & pushes Docker image to DockerHub
+GitHub Actions (CI)
+  - Builds Docker image, scans with Trivy, pushes to DockerHub
+  - Updates image tag (sha-XXXXXXX) in Helm values file
+  - Commits & pushes values.yaml back to Git [skip ci]
        ↓
-Developer updates image tag in helm/backend/values.yaml and pushes to Git
-       ↓
-ArgoCD detects Git change → syncs cluster → rolling update begins
+ArgoCD detects values.yaml change (~3 min polling)
+  - Re-renders Helm templates with new image tag
+  - Applies rolling update to the cluster
+  - Monitors rollout; reverts on failure (selfHeal: true)
        ↓
 Zero-downtime deployment complete
 ```
 
-> **Note:** `infra/k8s/deploy.sh` is a **bootstrap-only** script used for the initial cluster setup. After ArgoCD is configured, it is no longer needed for application deployments.
+### Bootstrap Procedure (One-time only)
+
+```bash
+# 1. Apply namespace, ConfigMaps, and Secrets
+kubectl apply -f infra/k8s/namespace.yaml
+kubectl apply -f infra/k8s/config/
+kubectl apply -f infra/k8s/job.yaml  # One-shot DB migration
+
+# 2. Hand over control to ArgoCD (never touch kubectl for deployments again)
+kubectl apply -f infra/k8s/argocd/
+```
+
+> `infra/k8s/bootstrap.sh` automates the above. It is the **only** time you run deployment commands manually.
 
 ---
 
