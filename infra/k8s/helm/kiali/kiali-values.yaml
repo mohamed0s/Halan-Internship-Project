@@ -1,0 +1,6 @@
+auth:
+  strategy: anonymous
+external_services:
+  tracing:
+    enabled: true
+    in_cluster_url: 'http://tracing.istio-system.svc.cluster.local:80'

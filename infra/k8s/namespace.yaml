@@ -12,3 +12,4 @@ metadata:
   labels:
     app.kubernetes.io/part-of: halan
     app.kubernetes.io/managed-by: kubectl
+    istio-injection: enabled

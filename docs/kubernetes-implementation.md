@@ -75,7 +75,7 @@ graph TD
 - **Deployment method:** Bitnami `bitnami/postgresql` Helm chart
 - **Chart values:** `infra/k8s/helm/postgres/postgres-values.yaml`
 - **Architecture:** `replication` mode — 1 Primary StatefulSet pod + 2 Read Replica pods
-- **Storage:** PVC backed by `longhorn` StorageClass (use `standard` on Minikube)
+- **Storage:** PVC backed by **Longhorn StorageClass** for distributed block storage across the RKE nodes.
 - **Credentials:** Pulled from pre-existing Secret `halan-db-secret`
 - **Why StatefulSet?** Each pod gets a stable DNS name (`halan-db-postgresql-primary-0`), its own PVC that survives restarts, and ordered startup/shutdown for safe replica election.
 

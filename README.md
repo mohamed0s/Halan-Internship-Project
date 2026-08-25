@@ -90,45 +90,35 @@ curl http://127.0.0.1:4000/api/name
 
 ---
 
-## ☸️ Option B: Kubernetes Cluster Setup (Minikube + Helm)
+## ☸️ Option B: Kubernetes Cluster Setup (RKE / RKE2)
 
-This is the full production-like setup. Follow these steps in order.
+This is the full production-like setup. Follow these steps assuming you have a running RKE or RKE2 cluster on an EC2 instance or local server.
 
 ### Prerequisites
 
-| Tool | Version | Install |
-|:-----|:--------|:--------|
-| [minikube](https://minikube.sigs.k8s.io/docs/start/) | v1.38+ | See link |
-| [kubectl](https://kubernetes.io/docs/tasks/tools/) | v1.36+ | See link |
+| Tool | Version | Notes |
+|:-----|:--------|:------|
+| Kubernetes | v1.28+ | RKE or RKE2 cluster running |
+| `kubectl` | v1.28+ | Configured to point to your cluster |
 | [Helm](https://helm.sh/docs/intro/install/) | v3+ | `curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \| bash` |
 
+*(Note: RKE2 comes with an Nginx Ingress Controller pre-installed. No need to install a separate ingress controller.)*
+
 ---
 
-### Step 1 — Start the Cluster
+### Step 1 — Check Cluster Health
 
 ```bash
-minikube start --driver=docker --cpus=4 --memory=6144
-minikube status   # All components should show "Running"
+kubectl get nodes
+# All nodes should show "Ready"
+
+kubectl get pods -n kube-system
+# Ensure CoreDNS and your Ingress Controller (if RKE2) are running
 ```
 
 ---
 
-### Step 2 — Enable Required Addons
-
-```bash
-# Ingress controller (routes external traffic into the cluster)
-minikube addons enable ingress
-
-# Metrics server (required for HPA to measure CPU)
-minikube addons enable metrics-server
-
-# Verify the ingress controller is running
-kubectl get pods -n ingress-nginx
-```
-
----
-
-### Step 3 — Add Helm Repositories
+### Step 2 — Add Helm Repositories
 
 ```bash
 helm repo add bitnami https://charts.bitnami.com/bitnami
@@ -137,7 +127,7 @@ helm repo update
 
 ---
 
-### Step 4 — Bootstrap the Cluster
+### Step 3 — Bootstrap the Cluster
 
 Run the bootstrap script from the `infra/k8s/` directory. This is the **only time** you run this script. After ArgoCD takes over, all deployments are automatic.
 
@@ -161,7 +151,7 @@ ArgoCD will immediately begin syncing all 4 applications from Git.
 
 ---
 
-### Step 5 — Verify Everything is Running
+### Step 4 — Verify Everything is Running
 
 ```bash
 # Check all resources in the halan namespace
@@ -177,22 +167,22 @@ kubectl get all -n halan
 
 ---
 
-### Step 6 — Access the Application
+### Step 5 — Access the Application
 
 ```bash
-# Get the Minikube cluster IP
-export MINIKUBE_IP=$(minikube ip)
+# Export your EC2 or server public IP
+export SERVER_IP="<YOUR_SERVER_IP>"
 
 # Test the frontend directly via IP (Catch-all Ingress)
-curl -I http://$MINIKUBE_IP
+curl -I http://$SERVER_IP
 
 # Test the backend API through Nginx reverse proxy
-curl http://$MINIKUBE_IP/api/name
+curl http://$SERVER_IP/api/name
 ```
 
 ---
 
-### Step 7 — Set Up ArgoCD (GitOps)
+### Step 6 — Set Up ArgoCD (GitOps)
 
 ArgoCD is already configured if you used `bootstrap.sh`. Once applied, it takes over all future deployments automatically.
 
@@ -262,5 +252,5 @@ Once applied, ArgoCD polls this repository every 3 minutes and automatically dep
 - [x] **Phase 12**: Ingress (L7 routing)
 - [x] **Phase 13**: ArgoCD GitOps — App of Apps pattern, multi-source Helm, automated image tag updates
 - [ ] **Phase 14**: ELK Stack (centralized logging)
-- [ ] **Phase 15**: Service Mesh (Linkerd + distributed tracing)
+- [ ] **Phase 15**: Service Mesh (Istio + distributed tracing)
 - [ ] **Phase 16**: Prometheus & Grafana observability
