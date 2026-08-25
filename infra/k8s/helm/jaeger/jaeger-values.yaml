@@ -1,5 +1,7 @@
 provisionDataStore:
   cassandra: false
+storage:
+  type: memory
 allInOne:
   enabled: true
 agent:
