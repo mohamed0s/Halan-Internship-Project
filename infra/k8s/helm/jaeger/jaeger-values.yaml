@@ -1,6 +1,6 @@
 provisionDataStore:
   cassandra: false
-storage:
+storage: # will use elasticsearch in the next phase
   type: memory
 allInOne:
   enabled: true
