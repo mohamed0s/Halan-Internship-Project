@@ -1,5 +1,6 @@
 # infra/k8s/helm/postgres/postgres-values.yaml
 architecture: replication # Enables Primary + Read-Replica setup
+fullnameOverride: "halan-db-postgresql"
 
 auth:
   database: halandb
