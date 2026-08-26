@@ -14,7 +14,7 @@ primary:
     # TODO (Phase 15.1): Change 'standard' to 'longhorn' when migrating to RKE
 
 readReplicas:
-  replicaCount: 2 # Number of read-only replica pods
+  replicaCount: 0 # Number of read-only replica pods
   persistence:
     enabled: true
     size: 8Gi

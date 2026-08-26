@@ -1,5 +1,5 @@
 appName: halan-backend
-replicaCount: 3
+replicaCount: 1
 
 image:
   repository: mohamedosa/halan-backend
@@ -12,13 +12,13 @@ service:
 
 autoscaling:
   enabled: true
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 6
   targetCPUUtilizationPercentage: 50
 
 resources:
   requests:
-    cpu: "100m"
+    cpu: "10m"
     memory: "128Mi"
   limits:
     cpu: "250m"
