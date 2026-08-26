@@ -12,6 +12,13 @@ primary:
     size: 8Gi
     storageClass: "longhorn" # Switched to longhorn for production storage
     # TODO (Phase 15.1): Change 'standard' to 'longhorn' when migrating to RKE
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
 
 readReplicas:
   replicaCount: 0 # Number of read-only replica pods
