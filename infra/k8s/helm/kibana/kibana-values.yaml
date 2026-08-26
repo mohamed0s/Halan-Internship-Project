@@ -1,0 +1,32 @@
+# infra/k8s/helm/kibana/kibana-values.yaml
+# -----------------------------------------
+# Bitnami Kibana chart — v12.1.10
+# Connects to the Elasticsearch deployed in the same namespace
+# -----------------------------------------
+# ARCHITECTURE:
+#   Deployment: kibana (1 replica)
+#   Service:    kibana → port 5601 (HTTP)
+# -----------------------------------------
+
+elasticsearch:
+  hosts:
+    - elasticsearch-master-hl.logging.svc.cluster.local
+  port: 9200
+
+# --- Service ---
+service:
+  type: ClusterIP # Exposed via kubectl port-forward, not externally
+  ports:
+    http: 5601 # Standard Kibana port
+
+# --- Resources: Kibana is much lighter than ES ---
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+persistence:
+  enabled: false

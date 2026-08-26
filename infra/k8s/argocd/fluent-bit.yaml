@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fluent-bit
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    # Source 1: Bitnami Fluent Bit chart
+    - repoURL: https://charts.bitnami.com/bitnami
+      chart: fluent-bit
+      targetRevision: "*" # Use latest stable — Fluent Bit is frequently updated
+      helm:
+        valueFiles:
+          - $values/infra/k8s/helm/fluent-bit/fluent-bit-values.yaml
+
+    # Source 2: Git repo for values reference
+    - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: logging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

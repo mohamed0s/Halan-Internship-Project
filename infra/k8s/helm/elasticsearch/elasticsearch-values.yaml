@@ -1,0 +1,50 @@
+# infra/k8s/helm/elasticsearch/elasticsearch-values.yaml
+# -------------------------------------------------------
+# Bitnami Elasticsearch chart — single-node dev mode
+# Chart version: 22.1.6 (Elasticsearch 8.x)
+#
+# ARCHITECTURE (what ArgoCD will deploy):
+#   StatefulSet: elasticsearch-master (1 replica)
+#   Services:    elasticsearch-master       → port 9200 (HTTP API)
+#                elasticsearch-master-hl    → port 9200 (headless, for Kibana/Fluent Bit)
+# -------------------------------------------------------
+
+# --- Master node: also acts as data + coordinating in single-node mode ---
+master:
+  masterOnly: false # set to false so this node also stores data
+  replicaCount: 1
+
+  heapSize: 512m
+
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: "longhorn" # Use Longhorn distributed storage (same as postgres)
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi # Heap (512m) + JVM overhead + OS = ~1Gi total
+
+# --- Disable separate data/coordinating/ingest nodes (single-node mode) ---
+data:
+  replicaCount: 0 # Master handles data in single-node mode
+
+coordinating:
+  replicaCount: 0 # Not needed for single-node
+
+ingest:
+  replicaCount: 0 # Not needed for single-node
+
+# --- Security: anonymous access for dev (same approach as Kiali) ---
+security:
+  enabled: false # TODO (prod): enable TLS + x-pack auth
+
+# --- Sysctls for ES: vm.max_map_count must be >= 262144 ---
+# Elasticsearch requires the OS to support large virtual memory maps.
+# This init container sets it automatically on each node.
+sysctlImage:
+  enabled: true

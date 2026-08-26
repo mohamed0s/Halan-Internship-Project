@@ -30,20 +30,28 @@ halan-internship-project/
 │       │   ├── halan-infra.yaml     # Manages raw K8s manifests
 │       │   ├── halan-backend.yaml   # Manages custom Flask Helm chart
 │       │   ├── halan-nginx.yaml     # Manages Bitnami Nginx chart
-│       │   └── halan-postgres.yaml  # Manages Bitnami PostgreSQL chart
+│       │   ├── halan-postgres.yaml  # Manages Bitnami PostgreSQL chart
+│       │   ├── elasticsearch.yaml   # Manages Bitnami Elasticsearch (wave 4)
+│       │   ├── kube-prometheus.yaml # Manages Bitnami kube-prometheus (wave 4)
+│       │   ├── kibana.yaml          # Manages Bitnami Kibana (wave 5)
+│       │   └── fluent-bit.yaml      # Manages Bitnami Fluent Bit DaemonSet (wave 5)
 │       ├── config/
 │       │   ├── backend-config.yaml  # Non-sensitive ConfigMap (DB_HOST, DB_PORT, etc.)
 │       │   └── secrets.yaml         # Database credentials (use Vault/Sealed Secrets in prod)
 │       └── helm/
 │           ├── nginx/               # Bitnami Nginx chart values (frontend)
 │           ├── postgres/            # Bitnami PostgreSQL chart values (database)
-│           └── backend/             # Custom Helm chart for Flask backend
-│               ├── Chart.yaml
-│               ├── values.yaml
-│               └── templates/
-│                   ├── deployment.yaml
-│                   ├── service.yaml
-│                   └── hpa.yaml
+│           ├── backend/             # Custom Helm chart for Flask backend
+│           │   ├── Chart.yaml
+│           │   ├── values.yaml
+│           │   └── templates/
+│           │       ├── deployment.yaml
+│           │       ├── service.yaml
+│           │       └── hpa.yaml
+│           ├── elasticsearch/       # Bitnami Elasticsearch values (ELK stack)
+│           ├── kibana/              # Bitnami Kibana values (ELK UI)
+│           ├── fluent-bit/          # Bitnami Fluent Bit DaemonSet values (log shipper)
+│           └── kube-prometheus/     # Bitnami kube-prometheus values (Prometheus + Grafana)
 ├── monitoring/                      # Prometheus & Grafana configs
 ├── docker-compose.yml               # Local development environment
 └── .env.example                     # Required environment variable reference
@@ -204,11 +212,30 @@ kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443
 # Open https://<YOUR_SERVER_IP>:8080
 # Username: admin | Password: from the command above
 
-# Apply all 4 ArgoCD Application manifests
+# Apply all ArgoCD Application manifests (8 apps + service mesh)
 kubectl apply -f infra/k8s/argocd/
 ```
 
 Once applied, ArgoCD polls this repository every 3 minutes and automatically deploys any Git change.
+
+---
+
+## 📊 Accessing Observability Dashboards
+
+After deploying all phases of the project (including observability and service mesh), you can access the various dashboards using `kubectl port-forward`.
+
+| Service | Namespace | Dashboard Purpose | Port-Forward Command | Access Port |
+|:--------|:----------|:------------------|:---------------------|:------------|
+| **ArgoCD** | `argocd` | GitOps & CD | `kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443` | `8080` |
+| **Kiali** | `istio-system` | Service Mesh Topology | `kubectl port-forward --address 0.0.0.0 svc/kiali -n istio-system 20001:20001` | `20001` |
+| **Jaeger** | `istio-system` | Distributed Tracing | `kubectl port-forward --address 0.0.0.0 svc/tracing -n istio-system 16686:80` | `16686` |
+| **Kibana** | `logging` | Centralized Logs (ELK) | `kubectl port-forward --address 0.0.0.0 svc/kibana -n logging 5601:5601` | `5601` |
+| **Longhorn** | `longhorn-system` | Storage Management | `kubectl port-forward --address 0.0.0.0 svc/longhorn-frontend -n longhorn-system 8080:80` | `8080` |
+| **Prometheus** | `monitoring` | Cluster Metrics | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-prometheus -n monitoring 9090:9090` | `9090` |
+| **Grafana** | `monitoring` | Metrics Dashboards | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-grafana -n monitoring 3000:80` | `3000` |
+| **Alertmanager** | `monitoring` | Alert Routing | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-alertmanager -n monitoring 9093:9093` | `9093` |
+
+*Note: Access these via your browser at `http://<YOUR_SERVER_IP>:<Access Port>` or `localhost` if running locally.*
 
 ---
 
@@ -251,6 +278,6 @@ Once applied, ArgoCD polls this repository every 3 minutes and automatically dep
 - [x] **Phase 11**: Jobs & CronJobs
 - [x] **Phase 12**: Ingress (L7 routing)
 - [x] **Phase 13**: ArgoCD GitOps — App of Apps pattern, multi-source Helm, automated image tag updates
-- [ ] **Phase 14**: ELK Stack (centralized logging)
-- [ ] **Phase 15**: Service Mesh (Istio + distributed tracing)
-- [ ] **Phase 16**: Prometheus & Grafana observability
+- [x] **Phase 14**: ELK Stack (Elasticsearch + Kibana + Fluent Bit via Bitnami)
+- [x] **Phase 15**: Service Mesh (Istio + Kiali + Jaeger distributed tracing)
+- [x] **Phase 16**: Prometheus & Grafana observability (Bitnami kube-prometheus stack)
