@@ -1,26 +1,7 @@
 # infra/k8s/helm/kube-prometheus/kube-prometheus-values.yaml
-# -----------------------------------------------------------
-# Bitnami kube-prometheus chart — v11.3.10
-# Bundles: Prometheus Operator + Prometheus + Alertmanager
-#          + Grafana + node-exporter + kube-state-metrics
-# -----------------------------------------------------------
-# HOW THE OPERATOR PATTERN WORKS:
-#   Traditional Prometheus: you edit prometheus.yml manually to add scrape targets.
-#   Operator Pattern: you create ServiceMonitor/PodMonitor CRDs pointing at your
-#   services. The Operator watches these CRDs and auto-generates scrape configs.
-#   Result: Adding a new app to monitoring = add a ServiceMonitor, no Prometheus restart.
-#
-# ARCHITECTURE (what ArgoCD will deploy):
-#   Deployment: prometheus-operator      → watches CRDs, manages Prometheus config
-#   StatefulSet: prometheus-kube-prom.. → scrapes metrics, stores time-series data
-#   StatefulSet: alertmanager-kube-pr.. → handles alerts (routes, silences, etc.)
-#   Deployment:  grafana                → visualization dashboards
-#   DaemonSet:   node-exporter          → collects host-level metrics (CPU, memory, disk)
-#   Deployment:  kube-state-metrics     → exposes K8s object state as metrics
-# -----------------------------------------------------------
+# prometheus-community/kube-prometheus-stack — v66.3.1
 
-# --- Prometheus Operator ---
-operator:
+prometheusOperator:
   enabled: true
   resources:
     requests:
@@ -30,52 +11,40 @@ operator:
       cpu: 200m
       memory: 256Mi
 
-# --- Prometheus ---
 prometheus:
   enabled: true
+  prometheusSpec:
+    retention: 7d
 
-  # WHY 7d retention? A learning env doesn't need months of data.
-  # In prod, you'd use remote_write to push to Thanos/Cortex for long-term storage.
-  retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: "longhorn"
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 8Gi
 
-  persistence:
-    enabled: true
-    size: 8Gi
-    storageClass: "longhorn"  # Consistent with postgres and elasticsearch
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
 
-  resources:
-    requests:
-      cpu: 200m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
+    # Discover ServiceMonitors across all namespaces (not just this chart's)
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
 
-  # WHY serviceMonitorSelectorNilUsesHelmValues: false?
-  # Tells Prometheus to discover ServiceMonitors across ALL namespaces,
-  # not just the ones created by this Helm chart. This is what allows
-  # it to scrape your Flask backend in the halan namespace.
-  serviceMonitorSelectorNilUsesHelmValues: false
-  podMonitorSelectorNilUsesHelmValues: false
-
-# --- Grafana ---
 grafana:
   enabled: true
-
-  # Admin credentials — change in prod!
   adminUser: admin
   adminPassword: admin
-
   service:
-    type: ClusterIP  # Access via kubectl port-forward on port 3000
-
-  # WHY persistence disabled?
-  # Grafana dashboards can be provisioned via ConfigMaps (sidecar pattern).
-  # For learning, the pre-built dashboards that ship with kube-prometheus
-  # are already excellent. We'll add custom dashboards as ConfigMaps later.
+    type: ClusterIP
   persistence:
     enabled: false
-
   resources:
     requests:
       cpu: 100m
@@ -84,15 +53,10 @@ grafana:
       cpu: 500m
       memory: 256Mi
 
-# --- Alertmanager ---
 alertmanager:
   enabled: true
-  # No receivers configured yet — alerts will fire but go nowhere.
-  # TODO: Add Slack/email receivers in alertmanager-values secret
-
-  persistence:
-    enabled: false  # No persistence needed until receivers are configured
-
+  alertmanagerSpec:
+    storage: {}
   resources:
     requests:
       cpu: 50m
@@ -101,18 +65,8 @@ alertmanager:
       cpu: 200m
       memory: 128Mi
 
-# --- Node Exporter: host-level metrics ---
-# WHY? Prometheus scrapes metrics from your applications, but it also needs
-# to know about the physical/VM host: CPU usage, memory, disk I/O, network.
-# Node-exporter runs as a DaemonSet (one pod per node) and exposes these
-# as Prometheus metrics at /metrics on port 9100.
-node-exporter:
+nodeExporter:
   enabled: true
 
-# --- Kube State Metrics: K8s object state ---
-# WHY? Prometheus scrapes running processes. kube-state-metrics watches the
-# K8s API and exposes the *desired state* of objects as metrics:
-# "how many replicas does this Deployment want?", "are there pending pods?",
-# "how old is this PersistentVolumeClaim?". This powers the K8s dashboards in Grafana.
-kube-state-metrics:
+kubeStateMetrics:
   enabled: true

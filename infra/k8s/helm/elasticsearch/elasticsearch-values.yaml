@@ -1,50 +1,39 @@
 # infra/k8s/helm/elasticsearch/elasticsearch-values.yaml
-# -------------------------------------------------------
-# Bitnami Elasticsearch chart — single-node dev mode
-# Chart version: 22.1.6 (Elasticsearch 8.x)
-#
-# ARCHITECTURE (what ArgoCD will deploy):
-#   StatefulSet: elasticsearch-master (1 replica)
-#   Services:    elasticsearch-master       → port 9200 (HTTP API)
-#                elasticsearch-master-hl    → port 9200 (headless, for Kibana/Fluent Bit)
-# -------------------------------------------------------
+# Official Elastic chart — elasticsearch 8.5.1
 
-# --- Master node: also acts as data + coordinating in single-node mode ---
-master:
-  masterOnly: false # set to false so this node also stores data
-  replicaCount: 1
+replicas: 1
 
-  heapSize: 512m
+esJavaOpts: "-Xmx512m -Xms512m"
 
-  persistence:
-    enabled: true
-    size: 8Gi
-    storageClass: "longhorn" # Use Longhorn distributed storage (same as postgres)
+esConfig:
+  elasticsearch.yml: |
+    discovery.type: single-node
+    xpack.security.enabled: false
+    xpack.security.http.ssl.enabled: false
+    xpack.security.transport.ssl.enabled: false
 
+# Soft anti-affinity required for single-node clusters
+antiAffinity: "soft"
+
+volumeClaimTemplate:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: "longhorn"
   resources:
     requests:
-      cpu: 50m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi # Heap (512m) + JVM overhead + OS = ~1Gi total
+      storage: 8Gi
 
-# --- Disable separate data/coordinating/ingest nodes (single-node mode) ---
-data:
-  replicaCount: 0 # Master handles data in single-node mode
+resources:
+  requests:
+    cpu: "50m"
+    memory: "1Gi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
 
-coordinating:
-  replicaCount: 0 # Not needed for single-node
+readinessProbe:
+  failureThreshold: 10
+  initialDelaySeconds: 30
 
-ingest:
-  replicaCount: 0 # Not needed for single-node
-
-# --- Security: anonymous access for dev (same approach as Kiali) ---
-security:
-  enabled: false # TODO (prod): enable TLS + x-pack auth
-
-# --- Sysctls for ES: vm.max_map_count must be >= 262144 ---
-# Elasticsearch requires the OS to support large virtual memory maps.
-# This init container sets it automatically on each node.
-sysctlImage:
+# Runs `sysctl -w vm.max_map_count=262144` on pod startup
+sysctlInitContainer:
   enabled: true

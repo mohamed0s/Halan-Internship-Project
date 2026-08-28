@@ -10,19 +10,16 @@ metadata:
 spec:
   project: default
   sources:
-    # Source 1: Bitnami Elasticsearch chart (same repo as nginx, postgres, etc.)
-    - repoURL: https://charts.bitnami.com/bitnami
+    - repoURL: https://helm.elastic.co
       chart: elasticsearch
-      targetRevision: "22.1.6"
+      targetRevision: "8.5.1"
       helm:
-        # $values refers to Source 2 below — ArgoCD resolves it at sync time
         valueFiles:
           - $values/infra/k8s/helm/elasticsearch/elasticsearch-values.yaml
 
-    # Source 2: Your Git repo — used ONLY to load the values file above
     - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
       targetRevision: HEAD
-      ref: values # This names the source "$values" for the reference above
+      ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: logging
@@ -32,3 +29,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+

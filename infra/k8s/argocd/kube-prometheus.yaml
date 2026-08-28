@@ -10,15 +10,13 @@ metadata:
 spec:
   project: default
   sources:
-    # Source 1: Bitnami kube-prometheus chart
-    - repoURL: https://charts.bitnami.com/bitnami
-      chart: kube-prometheus
-      targetRevision: "11.3.10"
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: "66.3.1"
       helm:
         valueFiles:
           - $values/infra/k8s/helm/kube-prometheus/kube-prometheus-values.yaml
 
-    # Source 2: Git repo for values reference
     - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
       targetRevision: HEAD
       ref: values
@@ -31,4 +29,5 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true
+      - ServerSideApply=true  # Required for large CRD installs (Prometheus CRDs > 256kb)
+

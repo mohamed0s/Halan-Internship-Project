@@ -10,22 +10,23 @@ metadata:
 spec:
   project: default
   sources:
-    # Source 1: Bitnami Kibana chart
-    - repoURL: https://charts.bitnami.com/bitnami
+    - repoURL: https://helm.elastic.co
       chart: kibana
-      targetRevision: "12.1.10"
+      targetRevision: "8.5.1" # must match elasticsearch version
       helm:
         valueFiles:
           - $values/infra/k8s/helm/kibana/kibana-values.yaml
 
-    # Source 2: Git repo for values reference
     - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
       targetRevision: HEAD
       ref: values
   destination:
     server: https://kubernetes.default.svc
-    namespace: logging # Same namespace as Elasticsearch
+    namespace: logging
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
