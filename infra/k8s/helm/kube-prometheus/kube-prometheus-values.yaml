@@ -19,7 +19,7 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: "longhorn"
+          storageClassName: "longhorn-single-node"
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
