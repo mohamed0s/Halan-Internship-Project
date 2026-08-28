@@ -1,0 +1,23 @@
+# infra/k8s/helm/longhorn/longhorn-values.yaml
+# Official Longhorn chart — v1.12.1
+# Single-node cluster configuration
+
+defaultSettings:
+  # Single-node cluster: 1 replica is the maximum possible
+  # This prevents volumes from being permanently faulted/unschedulable
+  defaultReplicaCount: 1
+
+  # How long (minutes) before Longhorn attempts to re-schedule a replica
+  # that has been on a failed node. 0 = immediately.
+  replicaSoftAntiAffinity: true
+  replicaZoneSoftAntiAffinity: true
+
+persistence:
+  # Ensure all dynamically provisioned PVCs use 1 replica on this single-node cluster
+  defaultClassReplicaCount: 1
+  defaultClass: true
+
+preUpgradeChecker:
+  # Disables the pre-upgrade check Job — required when ArgoCD manages the upgrade
+  # to avoid hook conflicts during sync
+  jobEnabled: false

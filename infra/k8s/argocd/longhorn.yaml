@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: longhorn
+  namespace: argocd
+  annotations:
+    # Wave 1: Storage must be ready before anything that needs PVCs (DB, backups, monitoring)
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.longhorn.io
+      chart: longhorn
+      targetRevision: v1.12.1
+      helm:
+        valueFiles:
+          - $values/infra/k8s/helm/longhorn/longhorn-values.yaml
+
+    - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true  # Required for Longhorn CRD installs (large resource sizes)
