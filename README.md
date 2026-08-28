@@ -15,10 +15,13 @@ halan-internship-project/
 ├── .github/
 │   └── workflows/                   # CI: builds images and updates image tags in Git
 ├── docs/                            # Technical documentation & runbooks
-│   ├── architecture.md              # Docker-era system architecture
-│   ├── kubernetes-implementation.md # Kubernetes deployment & GitOps documentation
-│   ├── k8s-architecture.md          # Migration plan & design decisions
-│   └── ci-cd-pipeline.md            # CI/CD pipeline documentation
+│   ├── kubernetes.md                # Core resources, namespaces, and PVCs
+│   ├── helm.md                      # Custom charts and upstream overrides
+│   ├── argocd.md                    # GitOps workflow, sync waves, and hooks
+│   ├── postgresql.md                # Database state, backups, and idempotency
+│   ├── observability.md             # ELK stack and Prometheus metrics
+│   ├── service-mesh.md              # Istio sidecars, Kiali, and Jaeger tracing
+│   └── ci-cd.md                     # GitHub Actions and Docker build pipeline
 ├── frontend/                        # Nginx web server + HTML/CSS UI
 ├── backend/                         # Python Flask REST API
 ├── db/
@@ -217,6 +220,16 @@ kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443
 | `POSTGRES_USER` | Database user | `pguser` |
 | `POSTGRES_PASSWORD` | Database password | `your_secure_password` |
 | `DB_PORT` | PostgreSQL port | `5432` |
+
+---
+
+## 🚧 Known Limitations & Future Work (Production Gaps)
+
+This project was built for an internship to demonstrate deep architectural knowledge. However, if this were deployed in a true production environment, the following gaps would need to be addressed:
+
+- **Secrets Management**: Secrets (like database passwords) are currently stored in plaintext in the repository for learning purposes. In a real environment, I would use **HashiCorp Vault** or **Sealed Secrets**.
+- **TLS/HTTPS**: TLS termination is not currently configured. For production, this would be handled via **cert-manager** and **Let's Encrypt** directly on the Nginx Ingress.
+- **Backup Strategy**: The daily database backups are currently piped to a local Longhorn PVC. In a production cluster, the `pg_dump` CronJob would stream the `.sql.gz` file directly to an off-site object storage bucket (like **AWS S3**).
 
 ---
 
