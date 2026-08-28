@@ -1,20 +1,57 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: db-backup-cronjob
+  name: db-backup
   namespace: halan
 spec:
+  schedule: "0 2 * * *"  # daily at 02:00 UTC
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
   jobTemplate:
-    metadata:
-      name: db-backup-cronjob
     spec:
+      backoffLimit: 2
       template:
-        metadata: {}
         spec:
           containers:
-          - image: busybox:latest
-            name: db-backup-cronjob
-            resources: {}
+            - name: pg-dump
+              image: postgres:16-alpine
+              command:
+                - sh
+                - -c
+                - |
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  DUMP_FILE="/backup/halandb_${TIMESTAMP}.sql.gz"
+                  pg_dump "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)" \
+                    | gzip > "${DUMP_FILE}"
+                  echo "Backup written to ${DUMP_FILE}"
+                  # Prune backups older than 7 days
+                  find /backup -name "*.sql.gz" -mtime +7 -delete
+              env:
+                - name: DB_HOST
+                  value: "halan-db-postgresql"
+                - name: DB_PORT
+                  value: "5432"
+                - name: DB_NAME
+                  value: "halandb"
+                - name: DB_USER
+                  value: "pguser"
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: halan-db-secret
+                      key: password
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
           restartPolicy: OnFailure
-  schedule: '*/5 * * * *'
-status: {}
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: db-backup-pvc
