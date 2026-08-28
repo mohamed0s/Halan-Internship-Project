@@ -1,0 +1,12 @@
+db:
+  host: "halan-db-postgresql"
+  port: "5432"
+  name: "halandb"
+  user: "pguser"
+  existingSecret: "halan-db-secret"
+  secretPasswordKey: "password"
+
+job:
+  image: "postgres:16-alpine"
+  backoffLimit: 3
+  syncWave: "3"

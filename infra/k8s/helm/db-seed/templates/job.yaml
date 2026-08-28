@@ -1,0 +1,74 @@
+{{/*
+  One-shot Job: waits for PostgreSQL, then seeds the database via psql.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration-job
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ .Values.job.syncWave | quote }}
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: {{ .Values.job.backoffLimit }}
+  template:
+    spec:
+      initContainers:
+        - name: pg-wait
+          image: {{ .Values.job.image }}
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h {{ .Values.db.host }} -p {{ .Values.db.port }} -U {{ .Values.db.user }}; do
+                sleep 2
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+
+      containers:
+        - name: db-seed
+          image: {{ .Values.job.image }}
+          command:
+            - sh
+            - -c
+            - |
+              psql "postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)" \
+                -f /sql/01-init.sql
+          env:
+            - name: DB_HOST
+              value: {{ .Values.db.host | quote }}
+            - name: DB_PORT
+              value: {{ .Values.db.port | quote }}
+            - name: DB_NAME
+              value: {{ .Values.db.name | quote }}
+            - name: DB_USER
+              value: {{ .Values.db.user | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.existingSecret }}
+                  key: {{ .Values.db.secretPasswordKey }}
+          volumeMounts:
+            - name: sql-scripts
+              mountPath: /sql
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+
+      volumes:
+        - name: sql-scripts
+          configMap:
+            name: db-seed-sql
+
+      restartPolicy: Never
