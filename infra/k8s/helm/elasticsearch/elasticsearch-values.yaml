@@ -17,7 +17,7 @@ antiAffinity: "soft"
 
 volumeClaimTemplate:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: "longhorn-single-node"
+  storageClassName: "longhorn"
   resources:
     requests:
       storage: 8Gi
