@@ -11,8 +11,7 @@ primary:
   persistence:
     enabled: true
     size: 8Gi
-    storageClass: "longhorn" # Switched to longhorn for production storage
-    # TODO (Phase 15.1): Change 'standard' to 'longhorn' when migrating to RKE
+    storageClass: "longhorn"
   resources:
     requests:
       cpu: 50m
@@ -22,7 +21,7 @@ primary:
       memory: 512Mi
 
 readReplicas:
-  replicaCount: 0 # Number of read-only replica pods
+  replicaCount: 1 # Number of read-only replica pods
   persistence:
     enabled: true
     size: 8Gi
