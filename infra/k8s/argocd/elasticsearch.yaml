@@ -19,7 +19,7 @@ spec:
 
     - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
       targetRevision: HEAD
-      ref: values
+      ref: values # This names the source "$values" for the reference above
   destination:
     server: https://kubernetes.default.svc
     namespace: logging

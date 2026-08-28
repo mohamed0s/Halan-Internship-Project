@@ -1,6 +1,10 @@
 # Halan Internship Project
 
-A cloud-native, 3-tier enterprise application deployed on Kubernetes using Helm charts, GitOps principles (ArgoCD), and production-grade observability.
+A cloud-native, 3-tier enterprise application deployed on Kubernetes using Helm charts, GitOps (ArgoCD), and production-grade observability.
+
+## Architecture
+
+![System Architecture](diagram.svg)
 
 ---
 
@@ -9,7 +13,7 @@ A cloud-native, 3-tier enterprise application deployed on Kubernetes using Helm 
 ```text
 halan-internship-project/
 ├── .github/
-│   └── workflows/                   # CI: builds images, scans, and updates image tags in Git
+│   └── workflows/                   # CI: builds images and updates image tags in Git
 ├── docs/                            # Technical documentation & runbooks
 │   ├── architecture.md              # Docker-era system architecture
 │   ├── kubernetes-implementation.md # Kubernetes deployment & GitOps documentation
@@ -17,42 +21,43 @@ halan-internship-project/
 │   └── ci-cd-pipeline.md            # CI/CD pipeline documentation
 ├── frontend/                        # Nginx web server + HTML/CSS UI
 ├── backend/                         # Python Flask REST API
-├── db/                              # PostgreSQL init SQL scripts
+├── db/
+│   └── init/
+│       └── 01-init.sql              # Canonical DB schema & seed data (single source of truth)
 ├── infra/
-│   ├── terraform/                   # AWS infrastructure (VPC, EKS, RDS)
 │   └── k8s/                         # All Kubernetes manifests & Helm values
-│       ├── namespace.yaml           # Cluster namespace definition
-│       ├── ingress.yaml             # Cluster-level L7 routing (managed by ArgoCD)
-│       ├── job.yaml                 # One-off database migration (bootstrap only)
-│       ├── cronjob.yaml             # Recurring scheduled task (managed by ArgoCD)
-│       ├── bootstrap.sh             # One-time cluster setup script
+│       ├── namespace.yaml
+│       ├── ingress.yaml
+│       ├── cronjob.yaml             # Daily pg_dump backup job
+│       ├── db-backup-pvc.yaml       # PVC for backup storage (Longhorn)
 │       ├── argocd/                  # ArgoCD App of Apps — one file per service
 │       │   ├── halan-infra.yaml     # Manages raw K8s manifests
 │       │   ├── halan-backend.yaml   # Manages custom Flask Helm chart
-│       │   ├── halan-nginx.yaml     # Manages Bitnami Nginx chart
-│       │   ├── halan-postgres.yaml  # Manages Bitnami PostgreSQL chart
-│       │   ├── elasticsearch.yaml   # Manages Bitnami Elasticsearch (wave 4)
-│       │   ├── kube-prometheus.yaml # Manages Bitnami kube-prometheus (wave 4)
-│       │   ├── kibana.yaml          # Manages Bitnami Kibana (wave 5)
-│       │   └── fluent-bit.yaml      # Manages Bitnami Fluent Bit DaemonSet (wave 5)
+│       │   ├── halan-nginx.yaml     # Manages Nginx chart
+│       │   ├── halan-postgres.yaml  # Manages PostgreSQL chart
+│       │   ├── halan-db-seed.yaml   # Manages db-seed Helm chart (PostSync hook)
+│       │   ├── elasticsearch.yaml   # elastic/elasticsearch 8.5.1 (wave 4)
+│       │   ├── kube-prometheus.yaml # prometheus-community/kube-prometheus-stack (wave 4)
+│       │   ├── kibana.yaml          # elastic/kibana 8.5.1 (wave 5)
+│       │   └── fluent-bit.yaml      # Fluent Bit DaemonSet (wave 5)
 │       ├── config/
-│       │   ├── backend-config.yaml  # Non-sensitive ConfigMap (DB_HOST, DB_PORT, etc.)
-│       │   └── secrets.yaml         # Database credentials (use Vault/Sealed Secrets in prod)
+│       │   ├── backend-config.yaml  # Non-sensitive ConfigMap
+│       │   └── secrets.yaml         # DB credentials (use Vault/Sealed Secrets in prod)
 │       └── helm/
-│           ├── nginx/               # Bitnami Nginx chart values (frontend)
-│           ├── postgres/            # Bitnami PostgreSQL chart values (database)
-│           ├── backend/             # Custom Helm chart for Flask backend
+│           ├── nginx/               # Nginx chart values
+│           ├── postgres/            # PostgreSQL chart values
+│           ├── backend/             # Custom Flask backend Helm chart
+│           ├── db-seed/             # One-shot DB seeding Helm chart
 │           │   ├── Chart.yaml
 │           │   ├── values.yaml
+│           │   ├── sql/ -> ../../../../../db/init/  (symlink)
 │           │   └── templates/
-│           │       ├── deployment.yaml
-│           │       ├── service.yaml
-│           │       └── hpa.yaml
-│           ├── elasticsearch/       # Bitnami Elasticsearch values (ELK stack)
-│           ├── kibana/              # Bitnami Kibana values (ELK UI)
-│           ├── fluent-bit/          # Bitnami Fluent Bit DaemonSet values (log shipper)
-│           └── kube-prometheus/     # Bitnami kube-prometheus values (Prometheus + Grafana)
-├── monitoring/                      # Prometheus & Grafana configs
+│           │       ├── job.yaml
+│           │       └── configmap.yaml
+│           ├── elasticsearch/       # elasticsearch-values.yaml
+│           ├── kibana/              # kibana-values.yaml
+│           ├── fluent-bit/          # fluent-bit-values.yaml
+│           └── kube-prometheus/     # kube-prometheus-values.yaml
 ├── docker-compose.yml               # Local development environment
 └── .env.example                     # Required environment variable reference
 ```
@@ -61,67 +66,45 @@ halan-internship-project/
 
 ## 🚀 Option A: Local Development (Docker Compose)
 
-The fastest way to run the full stack locally.
-
 ### Prerequisites
 - [Docker Engine](https://docs.docker.com/engine/install/) & Docker Compose plugin
 
-### Steps
-
 ```bash
-# 1. Clone the repository
-git clone https://github.com/<your-username>/Halan-Internship-Project.git
+git clone https://github.com/mohamed0s/Halan-Internship-Project.git
 cd Halan-Internship-Project
-
-# 2. Set up your local environment variables
 cp .env.example .env
-# Edit .env and set a password for POSTGRES_PASSWORD
-
-# 3. Launch the full 3-tier stack
+# Edit .env — set POSTGRES_PASSWORD
 docker compose up -d --build
-
-# 4. Verify all services are healthy
-docker compose ps
-
-# 5. Test the application
 curl http://127.0.0.1:4000/api/name
 ```
 
 **Expected output:**
 ```json
-{
-  "name": "Mohamed",
-  "source": "PostgreSQL Database",
-  "status": "success"
-}
+{ "name": "Mohamed", "source": "PostgreSQL Database", "status": "success" }
 ```
 
 ---
 
-## ☸️ Option B: Kubernetes Cluster Setup (RKE / RKE2)
-
-This is the full production-like setup. Follow these steps assuming you have a running RKE or RKE2 cluster on an EC2 instance or local server.
+## ☸️ Option B: Kubernetes Cluster Setup (RKE2)
 
 ### Prerequisites
 
 | Tool | Version | Notes |
 |:-----|:--------|:------|
-| Kubernetes | v1.28+ | RKE or RKE2 cluster running |
+| Kubernetes | v1.28+ | RKE2 cluster running |
 | `kubectl` | v1.28+ | Configured to point to your cluster |
 | [Helm](https://helm.sh/docs/intro/install/) | v3+ | `curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \| bash` |
+| [Longhorn](https://longhorn.io/docs/latest/deploy/install/) | v1.6+ | Required for PVC storage |
 
-*(Note: RKE2 comes with an Nginx Ingress Controller pre-installed. No need to install a separate ingress controller.)*
+*(RKE2 comes with an Nginx Ingress Controller pre-installed.)*
 
 ---
 
 ### Step 1 — Check Cluster Health
 
 ```bash
-kubectl get nodes
-# All nodes should show "Ready"
-
+kubectl get nodes          # All nodes: Ready
 kubectl get pods -n kube-system
-# Ensure CoreDNS and your Ingress Controller (if RKE2) are running
 ```
 
 ---
@@ -129,7 +112,9 @@ kubectl get pods -n kube-system
 ### Step 2 — Add Helm Repositories
 
 ```bash
-helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add argo   https://argoproj.github.io/argo-helm
+helm repo add elastic https://helm.elastic.co
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 ```
 
@@ -137,40 +122,35 @@ helm repo update
 
 ### Step 3 — Bootstrap the Cluster
 
-Run the bootstrap script from the `infra/k8s/` directory. This is the **only time** you run this script. After ArgoCD takes over, all deployments are automatic.
-
 ```bash
 cd infra/k8s/
 
-# Apply the namespace first — everything else lives inside it
+# Namespace + config
 kubectl apply -f namespace.yaml
-
-# Apply ConfigMaps and Secrets (database credentials & app config)
 kubectl apply -f config/
 
-# Run the one-shot DB migration job
-kubectl apply -f job.yaml
+# Install ArgoCD
+helm install argocd argo/argo-cd --create-namespace --namespace argocd
 
-# Hand over control to ArgoCD — it deploys everything from here
+# Wait for ArgoCD pods
+kubectl get pods -n argocd -w
+
+# Hand over to ArgoCD — it deploys everything else from Git
 kubectl apply -f argocd/
 ```
 
-ArgoCD will immediately begin syncing all 4 applications from Git.
+ArgoCD reads the App of Apps manifests and automatically deploys all services in sync-wave order.
+
+> **DB seeding** is handled automatically by the `halan-db-seed` ArgoCD Application.
+> It runs a one-shot Kubernetes Job as a PostSync hook — no manual `kubectl apply` needed.
 
 ---
 
-### Step 4 — Verify Everything is Running
+### Step 4 — Verify
 
 ```bash
-# Check all resources in the halan namespace
 kubectl get all -n halan
-
-# All pods should be in Running state (may take 1-2 minutes for DB)
-# You should see:
-# - halan-backend pods (Deployment, 2-6 replicas via HPA)
-# - halan-nginx pods (Deployment, 2-5 replicas via Helm HPA)
-# - halan-db-postgresql-0 (StatefulSet primary)
-# - halan-db-postgresql-read-0 (StatefulSet read replica)
+# Expected: backend pods, nginx pods, halan-db-postgresql-0 StatefulSet
 ```
 
 ---
@@ -178,64 +158,38 @@ kubectl get all -n halan
 ### Step 5 — Access the Application
 
 ```bash
-# Export your EC2 or server public IP
 export SERVER_IP="<YOUR_SERVER_IP>"
-
-# Test the frontend directly via IP (Catch-all Ingress)
 curl -I http://$SERVER_IP
-
-# Test the backend API through Nginx reverse proxy
 curl http://$SERVER_IP/api/name
 ```
 
 ---
 
-### Step 6 — Set Up ArgoCD (GitOps)
-
-ArgoCD is already configured if you used `bootstrap.sh`. Once applied, it takes over all future deployments automatically.
+### Step 6 — ArgoCD UI
 
 ```bash
-# Install ArgoCD
-helm repo add argo https://argoproj.github.io/argo-helm
-helm repo update
-helm install argocd argo/argo-cd --create-namespace --namespace argocd
-
-# Wait for all ArgoCD pods to be Running
-kubectl get pods -n argocd -w
-
-# Get the initial admin password
+# Get initial admin password
 kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath="{.data.password}" | base64 -d; echo
 
-# Expose the ArgoCD UI to your external IP
 kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443
-# Open https://<YOUR_SERVER_IP>:8080
-# Username: admin | Password: from the command above
-
-# Apply all ArgoCD Application manifests (8 apps + service mesh)
-kubectl apply -f infra/k8s/argocd/
+# Open https://<SERVER_IP>:8080 — admin / <password above>
 ```
-
-Once applied, ArgoCD polls this repository every 3 minutes and automatically deploys any Git change.
 
 ---
 
-## 📊 Accessing Observability Dashboards
+## 📊 Observability Dashboards
 
-After deploying all phases of the project (including observability and service mesh), you can access the various dashboards using `kubectl port-forward`.
-
-| Service | Namespace | Dashboard Purpose | Port-Forward Command | Access Port |
-|:--------|:----------|:------------------|:---------------------|:------------|
-| **ArgoCD** | `argocd` | GitOps & CD | `kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443` | `8080` |
-| **Kiali** | `istio-system` | Service Mesh Topology | `kubectl port-forward --address 0.0.0.0 svc/kiali -n istio-system 20001:20001` | `20001` |
-| **Jaeger** | `istio-system` | Distributed Tracing | `kubectl port-forward --address 0.0.0.0 svc/tracing -n istio-system 16686:80` | `16686` |
-| **Kibana** | `logging` | Centralized Logs (ELK) | `kubectl port-forward --address 0.0.0.0 svc/kibana -n logging 5601:5601` | `5601` |
-| **Longhorn** | `longhorn-system` | Storage Management | `kubectl port-forward --address 0.0.0.0 svc/longhorn-frontend -n longhorn-system 8080:80` | `8080` |
-| **Prometheus** | `monitoring` | Cluster Metrics | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-prometheus -n monitoring 9090:9090` | `9090` |
-| **Grafana** | `monitoring` | Metrics Dashboards | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-grafana -n monitoring 3000:80` | `3000` |
-| **Alertmanager** | `monitoring` | Alert Routing | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-alertmanager -n monitoring 9093:9093` | `9093` |
-
-*Note: Access these via your browser at `http://<YOUR_SERVER_IP>:<Access Port>` or `localhost` if running locally.*
+| Service | Namespace | Purpose | Port-Forward | Port |
+|:--------|:----------|:--------|:-------------|:-----|
+| **ArgoCD** | `argocd` | GitOps & CD | `kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443` | 8080 |
+| **Kibana** | `logging` | Centralized Logs | `kubectl port-forward --address 0.0.0.0 svc/kibana-kibana -n logging 5601:5601` | 5601 |
+| **Prometheus** | `monitoring` | Cluster Metrics | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-stack-prometheus -n monitoring 9090:9090` | 9090 |
+| **Grafana** | `monitoring` | Metrics Dashboards | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-stack-grafana -n monitoring 3000:80` | 3000 |
+| **Alertmanager** | `monitoring` | Alert Routing | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-stack-alertmanager -n monitoring 9093:9093` | 9093 |
+| **Kiali** | `istio-system` | Service Mesh Topology | `kubectl port-forward --address 0.0.0.0 svc/kiali -n istio-system 20001:20001` | 20001 |
+| **Jaeger** | `istio-system` | Distributed Tracing | `kubectl port-forward --address 0.0.0.0 svc/tracing -n istio-system 16686:80` | 16686 |
+| **Longhorn** | `longhorn-system` | Storage Management | `kubectl port-forward --address 0.0.0.0 svc/longhorn-frontend -n longhorn-system 8080:80` | 8080 |
 
 ---
 
@@ -243,12 +197,15 @@ After deploying all phases of the project (including observability and service m
 
 | Decision | Rationale |
 |:---------|:----------|
-| **Nginx & PostgreSQL via Bitnami Helm** | Battle-tested charts handle StatefulSets, PVCs, and replication correctly |
-| **Backend via Custom Helm Chart** | Gives full control over templates while maintaining Helm release management |
-| **Ingress is standalone (not inside any chart)** | Ingress is cluster-level routing — it must grow independently as new services are added |
-| **HPA inside the backend chart** | HPA is tightly coupled to the backend Deployment's lifecycle; if you delete the backend, the HPA should go with it |
-| **Jobs & CronJobs are standalone** | Decoupled from service lifecycle; a DB migration shouldn't be deleted when you redeploy the backend |
-| **Secrets in `config/secrets.yaml`** | For learning only — in production, use HashiCorp Vault or Sealed Secrets |
+| **Helm for all stateful/complex services** | Charts handle StatefulSets, PVCs, and upgrades correctly |
+| **Custom Helm chart for backend** | Full template control while keeping Helm release management |
+| **db-seed as a Helm PostSync hook** | Runs once after each ArgoCD sync, auto-deletes on success — never reconciled as a permanent object |
+| **Symlink `db-seed/sql/` → `db/init/`** | Single source of truth for SQL; no copies, no drift |
+| **Ingress is standalone** | Cluster-level routing grows independently as services are added |
+| **HPA inside backend chart** | Tightly coupled to the Deployment lifecycle |
+| **Official upstream charts for ELK & Prometheus** | Bitnami/Broadcom pulled their images from Docker Hub; official charts (`elastic/*`, `prometheus-community/*`) are maintained and publicly available |
+| **Longhorn for all PVCs** | Production-grade distributed block storage with replication |
+| **Secrets in `config/secrets.yaml`** | Learning environment only — use HashiCorp Vault or Sealed Secrets in production |
 
 ---
 
@@ -278,6 +235,8 @@ After deploying all phases of the project (including observability and service m
 - [x] **Phase 11**: Jobs & CronJobs
 - [x] **Phase 12**: Ingress (L7 routing)
 - [x] **Phase 13**: ArgoCD GitOps — App of Apps pattern, multi-source Helm, automated image tag updates
-- [x] **Phase 14**: ELK Stack (Elasticsearch + Kibana + Fluent Bit via Bitnami)
+- [x] **Phase 14**: ELK Stack (Elasticsearch + Kibana + Fluent Bit)
 - [x] **Phase 15**: Service Mesh (Istio + Kiali + Jaeger distributed tracing)
-- [x] **Phase 16**: Prometheus & Grafana observability (Bitnami kube-prometheus stack)
+- [x] **Phase 16**: Prometheus & Grafana observability (kube-prometheus-stack)
+- [x] **Phase 17**: DB seeding via Helm PostSync hook — DRY, idempotent, ArgoCD-native
+- [x] **Phase 18**: Daily pg_dump backup CronJob with Longhorn-backed PVC
