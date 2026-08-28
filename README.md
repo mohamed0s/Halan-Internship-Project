@@ -4,7 +4,7 @@ A cloud-native, 3-tier enterprise application deployed on Kubernetes using Helm 
 
 ## Architecture
 
-![System Architecture](diagram.svg)
+![System Architecture](docs/img/diagram.svg)
 
 ---
 
