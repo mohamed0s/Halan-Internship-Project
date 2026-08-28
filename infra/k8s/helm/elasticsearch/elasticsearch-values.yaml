@@ -8,6 +8,7 @@ esJavaOpts: "-Xmx512m -Xms512m"
 esConfig:
   elasticsearch.yml: |
     # Empty config since discovery.type is removed
+
 # Soft anti-affinity required for single-node clusters
 antiAffinity: "soft"
 
