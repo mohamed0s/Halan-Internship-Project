@@ -1,13 +1,19 @@
 # infra/k8s/helm/elasticsearch/elasticsearch-values.yaml
-# Official Elastic chart — elasticsearch 8.5.1
+# Official Elastic chart -- elasticsearch 8.5.1
 
 replicas: 1
 
 esJavaOpts: "-Xmx512m -Xms512m"
 
-esConfig:
-  elasticsearch.yml: |
-    # Empty config since discovery.type is removed
+# Pin the elastic password so it survives pod recycling.
+# The ES chart only reads ELASTIC_PASSWORD on first-ever bootstrap of a blank PV.
+# If the pod is recycled while the PV has existing data, ES ignores the env var and
+# uses the password already stored in its internal security index. A stable pinned
+# value here ensures the Helm-managed secret and the running ES password always agree.
+# On a fresh install, change this to a new strong password before deploying.
+extraEnvs:
+  - name: ELASTIC_PASSWORD
+    value: "KuzJAt78BFbYYz62"
 
 # Soft anti-affinity required for single-node clusters
 antiAffinity: "soft"

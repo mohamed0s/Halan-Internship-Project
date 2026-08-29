@@ -223,6 +223,83 @@ kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443
 
 ---
 
+
+---
+
+## ⚠️ Fresh Install on New Nodes — Known Gotchas
+
+> These are issues you **will** encounter on a brand-new cluster. Read this before deploying.
+
+### 1. Elasticsearch Password Pinning
+
+The Elastic Helm chart generates a **random** `ELASTIC_PASSWORD` on first render and stores it in the `elasticsearch-master-credentials` Secret. ES reads this value **only once** — during its very first startup on a blank PV. After that, the password lives inside ES's internal security index on the PV.
+
+**The problem**: If you ever delete/recycle the ES pod (e.g., to fix a crash) without wiping the PV, ES ignores the new `ELASTIC_PASSWORD` env var and keeps the old one from the PV. But ArgoCD re-renders the Helm secret with a fresh random value → **password mismatch → Kibana pre-install hook gets 401**.
+
+**The fix** (already applied): `elasticsearch-values.yaml` now pins a stable password via `extraEnvs`. For a fresh install, **change this password to a new strong value** before deploying. Do not leave it as-is from this repo.
+
+> **Action required on fresh install**: Edit `infra/k8s/helm/elasticsearch/elasticsearch-values.yaml` and set a new `ELASTIC_PASSWORD` value before running `kubectl apply -f argocd/`.
+
+---
+
+### 2. Kibana Pre-Install Hook — `409 Secret Already Exists`
+
+The Kibana chart's `pre-install` Job (`manage-es-token.js`) runs a 3-step sequence:
+1. DELETE the old ES service token (404 is OK)
+2. POST to create a new ES service token
+3. POST to create the `kibana-kibana-es-token` k8s Secret
+
+If the hook **partially succeeds** (e.g., step 2 completes but step 3 fails), the next ArgoCD retry will fail with:
+```
+secrets "kibana-kibana-es-token" already exists
+```
+This is a **known bug in Kibana chart 8.5.1** — the script has no idempotency for the k8s secret creation.
+
+**Fix**: Before each Kibana sync attempt (or whenever Kibana is stuck), run:
+```bash
+kubectl delete secret kibana-kibana-es-token -n logging --ignore-not-found
+kubectl delete job pre-install-kibana-kibana -n logging --ignore-not-found
+```
+Then trigger a fresh ArgoCD sync.
+
+---
+
+### 3. ArgoCD Owns the ES Credentials Secret — Do Not Patch It Directly
+
+The `elasticsearch-master-credentials` Secret is managed by ArgoCD (`selfHeal: true`). Any `kubectl patch` or `kubectl apply` on it will be silently **reverted within seconds**.
+
+If you ever need to update the password mid-cluster (not on fresh install):
+```bash
+# Step 1: Tell ArgoCD to ignore manual changes to this secret
+kubectl annotate secret elasticsearch-master-credentials -n logging \
+  argocd.argoproj.io/compare-options=IgnoreExtraneous --overwrite
+
+# Step 2: Delete and recreate with the correct password
+kubectl delete secret elasticsearch-master-credentials -n logging
+kubectl create secret generic elasticsearch-master-credentials -n logging \
+  --from-literal=username=elastic \
+  --from-literal=password=<CORRECT_PASSWORD>
+```
+
+---
+
+### 4. Sync Wave Order Matters
+
+The ArgoCD Applications use sync waves:
+- Wave 4: `elasticsearch`
+- Wave 5: `kibana`
+
+Kibana **must not** be synced until Elasticsearch is fully `Healthy` and `Synced`. ArgoCD handles this automatically via sync waves, but if you manually force-sync all apps at once, Kibana's pre-install hook will fail because ES isn't ready yet.
+
+**Safe order for manual recovery**:
+```bash
+# Wait for ES to be healthy first
+kubectl get application elasticsearch -n argocd -w
+
+# Then sync Kibana
+kubectl patch application kibana -n argocd --type merge -p '{"operation":{"initiatedBy":{"username":"admin"},"sync":{"revision":"HEAD","prune":true,"syncStrategy":{"hook":{"force":true}}}}}'
+```
+
 ## 🚧 Known Limitations & Future Work (Production Gaps)
 
 This project was built for an internship to demonstrate deep architectural knowledge. However, if this were deployed in a true production environment, the following gaps would need to be addressed:
