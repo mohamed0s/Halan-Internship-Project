@@ -1,0 +1,90 @@
+# infra/k8s/helm/kibana/kibana-dataview-job.yaml
+# ---------------------------------------------------
+# Declarative Kibana Data View bootstrap Job
+#
+# WHY THIS JOB EXISTS:
+#   Kibana starts empty — it has no index patterns/data views configured.
+#   This Job creates the "fluent-bit-*" Data View so logs from Fluent Bit
+#   are immediately visible in Kibana's Discover tab after every fresh
+#   cluster deployment.
+#
+# WHY A JOB (not a lifecycle hook):
+#   A postStart lifecycle hook is unreliable — it runs before Kibana is
+#   ready, races with the readiness probe, and causes Kubernetes to mark
+#   the pod as failed if the hook takes too long. A Job runs independently
+#   and can safely retry until Kibana is ready.
+#
+# IDEMPOTENCY:
+#   The API call uses PUT with a fixed ID ("fluent-bit-star"), so re-running
+#   this job on subsequent syncs will not create duplicate data views.
+#
+# WHEN IT RUNS:
+#   ArgoCD applies this Job on every sync. Kubernetes will not re-run a
+#   Completed Job unless it is deleted. ArgoCD is configured to prune
+#   and recreate it on each sync wave via the sync-wave annotation.
+# ---------------------------------------------------
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibana-dataview-setup
+  namespace: logging
+  annotations:
+    # Run after Kibana is synced (wave 6 = after kibana at wave 5)
+    argocd.argoproj.io/sync-wave: "6"
+    # Force ArgoCD to replace this Job on every sync so it re-runs
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: dataview-setup
+          image: curlimages/curl:8.5.0
+          env:
+            - name: ELASTIC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch-master-credentials
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              KIBANA_URL="http://kibana-kibana.logging.svc.cluster.local:5601"
+
+              echo "Waiting for Kibana to become available..."
+              until curl -s -o /dev/null -w '%{http_code}' \
+                    -u "elastic:${ELASTIC_PASSWORD}" \
+                    "${KIBANA_URL}/api/status" | grep -q "200"; do
+                echo "Kibana not ready yet, retrying in 10s..."
+                sleep 10
+              done
+              echo "Kibana is ready."
+
+              echo "Creating fluent-bit-* Data View..."
+              RESULT=$(curl -s -o /dev/null -w '%{http_code}' \
+                -u "elastic:${ELASTIC_PASSWORD}" \
+                -X POST "${KIBANA_URL}/api/data_views/data_view" \
+                -H "kbn-xsrf: true" \
+                -H "Content-Type: application/json" \
+                -d '{
+                  "data_view": {
+                    "id": "fluent-bit-star",
+                    "title": "fluent-bit-*",
+                    "name": "Fluent Bit Logs",
+                    "timeFieldName": "@timestamp"
+                  },
+                  "override": true
+                }')
+
+              echo "API response: ${RESULT}"
+              if [ "${RESULT}" = "200" ] || [ "${RESULT}" = "409" ]; then
+                echo "Data View created/already exists successfully."
+              else
+                echo "ERROR: Unexpected response code ${RESULT}"
+                exit 1
+              fi

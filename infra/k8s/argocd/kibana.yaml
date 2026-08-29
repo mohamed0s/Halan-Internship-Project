@@ -20,6 +20,14 @@ spec:
     - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
       targetRevision: HEAD
       ref: values
+
+    # Declarative Job that creates the fluent-bit-* Data View in Kibana
+    # after every fresh deployment (ArgoCD PostSync hook, wave 6)
+    - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
+      targetRevision: HEAD
+      path: infra/k8s/helm/kibana
+      directory:
+        include: "kibana-dataview-job.yaml"
   destination:
     server: https://kubernetes.default.svc
     namespace: logging
