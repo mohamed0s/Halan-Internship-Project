@@ -17,8 +17,7 @@
 #   - Bitnami maintains an official, hardened chart
 # --------------------------------------------------
 
-daemonset:
-  enabled: true
+kind: DaemonSet
 
 config:
   inputs: |

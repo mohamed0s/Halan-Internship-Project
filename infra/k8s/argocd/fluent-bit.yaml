@@ -11,7 +11,7 @@ spec:
   project: default
   sources:
     # Source 1: Bitnami Fluent Bit chart
-    - repoURL: https://charts.bitnami.com/bitnami
+    - repoURL: https://fluent.github.io/helm-charts
       chart: fluent-bit
       targetRevision: "*" # Use latest stable — Fluent Bit is frequently updated
       helm:
