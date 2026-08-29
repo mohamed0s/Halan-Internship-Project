@@ -19,6 +19,13 @@
 
 kind: DaemonSet
 
+env:
+  - name: ELASTIC_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: elasticsearch-master-credentials
+        key: password
+
 config:
   inputs: |
     [INPUT]
@@ -46,12 +53,15 @@ config:
     [OUTPUT]
         Name            es
         Match           *
-        Host            elasticsearch-master-hl.logging.svc.cluster.local
+        Host            elasticsearch-master.logging.svc.cluster.local
         Port            9200
+        tls             On
+        tls.verify      Off
+        HTTP_User       elastic
+        HTTP_Passwd     ${ELASTIC_PASSWORD}
         Logstash_Format On
         Logstash_Prefix fluent-bit
         Retry_Limit     False
-        tls             Off
 
 # --- RBAC: Fluent Bit needs to call the K8s API for metadata enrichment ---
 rbac:
