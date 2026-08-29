@@ -48,10 +48,10 @@ config:
         Match           *
         Host            elasticsearch-master-hl.logging.svc.cluster.local
         Port            9200
-        Logstash_Format On          # WHY? Creates daily indices like fluent-bit-2024.01.15
-        Logstash_Prefix fluent-bit  # Index prefix — you'll create a fluent-bit-* pattern in Kibana
-        Retry_Limit     False       # Keep retrying on ES downtime (never drop logs)
-        tls             Off         # TODO (prod): enable TLS when ES security is on
+        Logstash_Format On
+        Logstash_Prefix fluent-bit
+        Retry_Limit     False
+        tls             Off
 
 # --- RBAC: Fluent Bit needs to call the K8s API for metadata enrichment ---
 rbac:
