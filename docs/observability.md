@@ -31,6 +31,7 @@ Kibana is deployed in the `logging` namespace.
 kubectl port-forward --address 0.0.0.0 svc/kibana-kibana -n logging 5601:5601
 # Open http://localhost:5601
 ```
+*Note: A Data View (Index Pattern) must be created in Kibana for `fluent-bit-*` to view the logs collected by Fluent Bit.*
 
 ---
 
@@ -44,6 +45,7 @@ To understand the health and performance of the cluster (CPU, memory, network, p
 3. **Alertmanager**: Evaluates rules against Prometheus data and routes alerts (e.g., to Slack or Email) if something goes wrong (e.g., node CPU > 90%).
 4. **Node Exporter**: Runs on every node to expose hardware and OS metrics.
 5. **Kube-State-Metrics**: Exposes Kubernetes-specific metrics (e.g., how many pods are pending, how many deployments have failed).
+6. **Istio PodMonitor**: A custom configuration that explicitly instructs Prometheus to scrape metrics from the Envoy sidecar proxies deployed by Istio.
 
 ### Accessing Grafana
 Grafana is deployed in the `monitoring` namespace. It comes pre-loaded with excellent default dashboards for Kubernetes cluster monitoring.

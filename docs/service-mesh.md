@@ -38,6 +38,7 @@ Because Istio's proxies measure all traffic, we can visualize the entire network
 kubectl port-forward --address 0.0.0.0 svc/kiali -n istio-system 20001:20001
 # Open http://localhost:20001
 ```
+*Note: Kiali requires a `PodMonitor` deployed in the cluster to instruct Prometheus to scrape Envoy sidecars. Without this `PodMonitor`, the Kiali graph will be completely empty. Kiali is also configured to pull distributed traces directly from the Jaeger query service.*
 
 ## 🕵️ Distributed Tracing (Jaeger)
 
