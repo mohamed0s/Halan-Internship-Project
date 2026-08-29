@@ -3,36 +3,40 @@
 
 replicas: 1
 
-esJavaOpts: " -Xmx512m -Xms512m\
+esJavaOpts: "-Xmx512m -Xms512m"
 
-# Set the elastic password explicitly so the Helm chart creates the secret
-# with a stable password instead of a random one. This ensures Kibana and
-# Elasticsearch always use the same password, and survives pod recycling.
+# Pin the elastic password so it survives pod recycling.
+# The ES chart only reads ELASTIC_PASSWORD on first-ever bootstrap of a blank PV.
+# If the pod is recycled while the PV has existing data, ES ignores the env var and
+# uses the password already stored in its internal security index. A stable pinned
+# value here ensures the Helm-managed secret and the running ES password always agree.
+# On a fresh install, change this to a new strong password before deploying.
 secret:
- password: \KuzJAt78BFbYYz62\
+  password: "KuzJAt78BFbYYz62"
 
 # Soft anti-affinity required for single-node clusters
-antiAffinity: \soft\
+antiAffinity: "soft"
 
 volumeClaimTemplate:
- accessModes: [\ReadWriteOnce\]
- storageClassName: \longhorn\
- resources:
- requests:
- storage: 8Gi
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: "longhorn"
+  resources:
+    requests:
+      storage: 8Gi
 
 resources:
- requests:
- cpu: \50m\
- memory: \1Gi\
- limits:
- cpu: \1000m\
- memory: \1Gi\
+  requests:
+    cpu: "50m"
+    memory: "1Gi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
 
 readinessProbe:
- failureThreshold: 10
- initialDelaySeconds: 30
+  failureThreshold: 10
+  initialDelaySeconds: 30
 
-# Runs \sysctl -w vm.max_map_count=262144\ on pod startup
+# Runs `sysctl -w vm.max_map_count=262144` on pod startup
 sysctlInitContainer:
- enabled: true
+  enabled: true
+
