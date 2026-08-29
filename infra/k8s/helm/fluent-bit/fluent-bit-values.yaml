@@ -61,6 +61,7 @@ config:
         HTTP_Passwd     ${ELASTIC_PASSWORD}
         Logstash_Format On
         Logstash_Prefix fluent-bit
+        Suppress_Type_Name On
         Retry_Limit     False
 
 # --- RBAC: Fluent Bit needs to call the K8s API for metadata enrichment ---
