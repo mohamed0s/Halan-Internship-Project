@@ -9,6 +9,12 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
+  ignoreDifferences:
+  - group: ""
+    kind: Secret
+    name: elasticsearch-master-credentials
+    jsonPointers:
+    - /data/password
   sources:
     - repoURL: https://helm.elastic.co
       chart: elasticsearch
@@ -16,10 +22,9 @@ spec:
       helm:
         valueFiles:
           - $values/infra/k8s/helm/elasticsearch/elasticsearch-values.yaml
-
     - repoURL: https://github.com/mohamed0s/Halan-Internship-Project
       targetRevision: HEAD
-      ref: values # This names the source "$values" for the reference above
+      ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: logging
@@ -29,4 +34,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-
