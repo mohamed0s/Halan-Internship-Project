@@ -70,3 +70,20 @@ sources:
     targetRevision: HEAD
     ref: values # This creates the $values reference used above
 ```
+
+
+## 🙈 Ignoring Differences (ignoreDifferences)
+
+Sometimes, Kubernetes controllers (like Istio) mutate resources after they are deployed, injecting fields that aren't in our Git repository. This causes ArgoCD to constantly show the application as "OutOfSync".
+
+To fix this, we use the `ignoreDifferences` configuration in our ArgoCD `Application` manifest. For example, to prevent sync issues with Istio's ValidatingWebhookConfiguration, we tell ArgoCD to ignore the `failurePolicy` field which Istio automatically manages:
+
+```yaml
+spec:
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: istiod-default-validator
+      jsonPointers:
+        - /webhooks/0/failurePolicy
+```

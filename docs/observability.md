@@ -16,9 +16,14 @@ When you have multiple replicas of frontend and backend pods, manually reading l
 3. **Fluent Bit**: A lightweight log shipper deployed as a `DaemonSet` (one pod on every node in the cluster). It reads the standard out (stdout) of every container, formats it, and ships it to Elasticsearch.
 
 ### Migration from Bitnami
-Originally, we used Bitnami charts for ELK. However, Bitnami (owned by Broadcom) recently pulled many images from Docker Hub, breaking the deployment. 
+Originally, we used Bitnami charts for ELK and Fluent Bit. However, Bitnami (owned by Broadcom) recently pulled many images from Docker Hub, breaking the deployment. 
 
-We migrated to the **official upstream Elastic charts** (`helm.elastic.co`). This required completely rewriting our custom `values.yaml` files, as the upstream charts use different schemas (e.g., `elasticsearchHosts` instead of `elasticsearch.hosts`).
+We migrated to the **official upstream Elastic charts** (`helm.elastic.co`) and the **official Fluent chart** (`fluent.github.io/helm-charts`). This required completely rewriting our custom `values.yaml` files, as the upstream charts use different schemas (e.g., `elasticsearchHosts` instead of `elasticsearch.hosts`).
+
+#### Fluent Bit `inotify` Limits (errno 24)
+When migrating Fluent Bit to the official chart, it runs as a non-root user by default for security. Because our configuration tails all container logs (`/var/log/containers/*.log`), this non-root user quickly exhausts the node's `inotify` watch limits, causing a `CrashLoopBackOff` with `Too many open files` (`errno=24`). 
+
+To securely fix this without running the entire Fluent Bit daemon as root, we use a privileged `initContainer` in `fluent-bit-values.yaml` to briefly bump the node's sysctl limits (`fs.inotify.max_user_instances=81920`) before the main non-root container starts.
 
 ### Accessing Kibana
 Kibana is deployed in the `logging` namespace.
