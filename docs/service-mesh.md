@@ -33,8 +33,11 @@ Because Istio's proxies measure all traffic, we can visualize the entire network
 - The requests per second (RPS) between them.
 - Any HTTP 4xx or 5xx errors occurring on the network.
 
-### Accessing Kiali
+### Accessing Kiali and generating traffic
 ```bash
+kubectl delete pod loadgen -n halan --ignore-not-found
+kubectl run loadgen --image=busybox -n halan --restart=Never \
+  -- /bin/sh -c "while true; do wget -q -O- http://halan-nginx.halan.svc.cluster.local > /dev/null; wget -q -O- http://halan-nginx.halan.svc.cluster.local/api/name > /dev/null; sleep 0.5; done"
 kubectl port-forward --address 0.0.0.0 svc/kiali -n istio-system 20001:20001
 # Open http://localhost:20001
 ```
@@ -48,6 +51,6 @@ If a user complains that a request to the frontend took 5 seconds, Jaeger can sh
 
 ### Accessing Jaeger
 ```bash
-kubectl port-forward --address 0.0.0.0 svc/tracing -n istio-system 16686:80
-# Open http://localhost:16686
+kubectl port-forward --address 0.0.0.0 svc/tracing -n istio-system 16685:80
+# Open http://localhost:16685
 ```
