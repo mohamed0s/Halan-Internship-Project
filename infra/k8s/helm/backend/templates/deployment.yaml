@@ -4,6 +4,7 @@ metadata:
   name: {{ .Values.appName }}
   labels:
     app: {{ .Values.appName }}
+    version: {{ .Values.image.tag | quote }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
@@ -13,6 +14,7 @@ spec:
     metadata:
       labels:
         app: {{ .Values.appName }}
+        version: {{ .Values.image.tag | quote }}
     spec:
       containers:
         - name: backend
