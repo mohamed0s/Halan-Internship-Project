@@ -2,17 +2,28 @@
 # Official Elastic chart — kibana 8.5.1
 #
 # AUTH STRATEGY: We authenticate Kibana to Elasticsearch using the built-in
-# `elastic` superuser credentials injected from the elasticsearch-master-credentials
-# secret. This avoids reliance on the pre-install hook's service account token
-# mechanism (kibana-kibana-es-token), which is fragile on repeated ArgoCD syncs.
+# Elasticsearch service account token mechanism.
+#
+# HOW IT WORKS:
+#   1. The Elastic Helm chart ships a pre-install hook (kibana-setup Job) that
+#      calls the ES /_security/service/elastic/kibana/credential/token API to
+#      mint a service-scoped token for Kibana.
+#   2. That token is stored in the `kibana-kibana-es-token` Secret (namespace: logging).
+#   3. The chart mounts that secret as the ELASTICSEARCH_SERVICEACCOUNTTOKEN env
+#      var inside the Kibana container — no username/password is used.
+#
+# WHY NOT elastic/password:
+#   Kibana 8.x explicitly REJECTS elasticsearch.username = "elastic" in kibana.yml.
+#   The elastic user is a superuser; Kibana needs to write to .kibana system indices
+#   with a service-account-scoped credential, not a cluster superuser.
+#   Attempting it causes a FATAL crash at startup (config validation failure).
 
 elasticsearchHosts: "https://elasticsearch-master:9200"
 
 kibanaConfig:
   kibana.yml: |
+    # TLS: ES uses a self-signed cert; skip hostname verification inside the cluster.
     elasticsearch.ssl.verificationMode: none
-    elasticsearch.username: elastic
-    elasticsearch.password: ${ELASTIC_PASSWORD}
     server.name: halan-kibana
 
 service:
@@ -26,11 +37,3 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-
-# Inject the elastic password from the secret so kibana.yml can reference it
-extraEnvs:
-  - name: "ELASTIC_PASSWORD"
-    valueFrom:
-      secretKeyRef:
-        name: elasticsearch-master-credentials
-        key: password

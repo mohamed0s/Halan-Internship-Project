@@ -1,8 +1,25 @@
+# infra/k8s/helm/kiali/kiali-values.yaml
+# kiali/kiali-operator chart
+#
+# WHY PROMETHEUS URL POINTS TO istio-system:
+#   There are two Prometheus instances in this cluster:
+#     1. kube-prometheus (monitoring ns) — scrapes k8s infra metrics (nodes, pods, etc.)
+#     2. Istio-bundled Prometheus (istio-system ns) — scrapes Envoy sidecar /stats/prometheus
+#        endpoints on every mesh pod. This is the one with Istio telemetry (istio_requests_total,
+#        istio_request_duration_milliseconds, etc.)
+#
+#   Kiali's graph/topology features depend entirely on Istio metrics. Pointing it at
+#   kube-prometheus results in empty graphs because kube-prometheus has 0 Istio metrics.
+#   The Istio-bundled Prometheus is pre-configured with the correct scrape jobs during
+#   Istio installation and has 93+ Istio metric families.
+
 auth:
   strategy: anonymous
 external_services:
   prometheus:
-    url: http://kube-prometheus-kube-prome-prometheus.monitoring.svc.cluster.local:9090
+    # Must point to the Istio-bundled Prometheus, NOT kube-prometheus.
+    # The Istio Prometheus is pre-configured to scrape all Envoy sidecars.
+    url: http://prometheus.istio-system.svc.cluster.local:9090
   tracing:
     enabled: true
     in_cluster_url: http://jaeger-query.istio-system.svc.cluster.local:16686
