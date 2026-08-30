@@ -22,4 +22,5 @@ external_services:
     url: http://prometheus.istio-system.svc.cluster.local:9090
   tracing:
     enabled: true
-    in_cluster_url: http://jaeger-query.istio-system.svc.cluster.local:16686
+    in_cluster_url: http://jaeger-query.istio-system.svc.cluster.local:16685
+    use_grpc: true
