@@ -19,6 +19,9 @@ primary:
     limits:
       cpu: 250m
       memory: 512Mi
+  podLabels:
+    app: halan-postgres
+    version: "18.8.12"
 
 readReplicas:
   replicaCount: 1 # Number of read-only replica pods
@@ -26,13 +29,6 @@ readReplicas:
     enabled: true
     size: 8Gi
     storageClass: "longhorn"
-
-primary:
-  podLabels:
-    app: halan-postgres
-    version: "18.8.12"
-
-readReplicas:
   podLabels:
     app: halan-postgres
     version: "18.8.12"
