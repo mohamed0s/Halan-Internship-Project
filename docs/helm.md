@@ -32,7 +32,7 @@ We built custom Helm charts for resources that require specific, tailored logic.
 For complex, battle-tested infrastructure components, we rely on official upstream charts rather than reinventing the wheel. We maintain custom `values.yaml` files to override default settings to suit our environment.
 
 - **Nginx (`helm/nginx/`):** We override the Bitnami Nginx chart to run as a non-root user (port 8080) and inject a custom `serverBlock` that configures it as a reverse proxy, routing `/api/` traffic to the backend service.
-- **PostgreSQL (`helm/postgres/`):** We override the Bitnami PostgreSQL chart to enable replication (1 primary, 2 read replicas) and configure Longhorn PVCs.
+- **PostgreSQL (`helm/postgres/`):** We override the Bitnami PostgreSQL chart to enable replication (1 primary, 1 read replica) and configure Longhorn PVCs.
 - **ELK & Prometheus:** We previously used Bitnami charts but migrated to the official upstream charts (`elastic/*` and `prometheus-community/*`) after Bitnami removed their images from Docker Hub. Our custom values files (`elasticsearch-values.yaml`, `kibana-values.yaml`, `kube-prometheus-values.yaml`) heavily modify these charts to adjust resource limits, disable unnecessary sub-charts, and configure ingress.
 
 ## 🛠️ Typical Helm Workflow (Local Testing)

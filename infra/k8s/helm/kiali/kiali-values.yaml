@@ -21,6 +21,4 @@ external_services:
     # The Istio Prometheus is pre-configured to scrape all Envoy sidecars.
     url: http://prometheus.istio-system.svc.cluster.local:9090
   tracing:
-    enabled: true
-    in_cluster_url: http://jaeger-query.istio-system.svc.cluster.local:16685
-    use_grpc: true
+    enabled: false

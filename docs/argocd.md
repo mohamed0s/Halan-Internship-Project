@@ -14,19 +14,22 @@ ArgoCD continuously monitors the `main` branch. If the actual state in the Kuber
 3. ArgoCD polls the repository (every ~3 minutes) and detects the updated `values.yaml`.
 4. ArgoCD re-renders the Helm templates and applies a rolling update to the cluster, resulting in a zero-downtime deployment.
 
-## 🗂️ App of Apps Pattern
+## 🗂️ Multiple Independent Applications
 
-We use the "App of Apps" pattern to manage the entire cluster declaratively. 
+All services are managed declaratively with ArgoCD. Instead of configuring applications manually in the ArgoCD UI, we define individual ArgoCD `Application` YAML files (one per service) in `infra/k8s/argocd/`. These are applied once to the cluster with `kubectl apply -f argocd/`, and ArgoCD takes over from there.
 
-Instead of configuring applications manually in the ArgoCD UI, we define a master application (`halan-infra.yaml`) that points to the `infra/k8s/argocd/` directory. That directory contains individual ArgoCD `Application` YAML files for every service in the project.
+**This is NOT the App of Apps pattern.** In App of Apps, a single parent `Application` watches a directory of other `Application` YAMLs and applies them for you. Here, we apply the `Application` manifests directly — each is an independent, peer-level application managed by ArgoCD.
 
-### Component Applications
-- **`halan-infra.yaml`**: The master app. It manages raw Kubernetes manifests in `infra/k8s/` (like namespaces, ingress, cronjobs) and bootstraps the rest.
-- **`halan-backend.yaml`**: Deploys the custom Flask backend Helm chart.
-- **`halan-nginx.yaml`**: Deploys the Nginx frontend.
-- **`halan-postgres.yaml`**: Deploys the PostgreSQL database.
-- **`halan-db-seed.yaml`**: Manages the database seeding process.
-- **Observability Apps**: `elasticsearch.yaml`, `kibana.yaml`, `kube-prometheus.yaml`, `fluent-bit.yaml`.
+### Application Manifest Inventory
+- **`longhorn.yaml`**: Deploys Longhorn storage (wave 1). Must be ready before anything that needs PVCs.
+- **`istio-base.yaml`** and **`istiod.yaml`**: Deploy Istio CRDs and control plane (wave 1).
+- **`halan-postgres.yaml`**: Deploys the PostgreSQL database (wave 3).
+- **`halan-backend.yaml`**: Deploys the custom Flask backend Helm chart (wave 3).
+- **`halan-nginx.yaml`**: Deploys the Nginx frontend (wave 3).
+- **`halan-infra.yaml`**: Deploys raw Kubernetes manifests from `infra/k8s/` — namespace, ingress, cronjobs, PVCs (wave 3).
+- **`halan-db-seed.yaml`**: Manages the database seeding process (PostSync hook, wave 3).
+- **Observability Apps**: `elasticsearch.yaml`, `kibana.yaml`, `kube-prometheus.yaml`, `fluent-bit.yaml` (waves 4–5).
+- **Mesh Observability**: `kiali.yaml` — service mesh dashboard.
 
 ## 🌊 Sync Waves
 
@@ -34,9 +37,8 @@ Order of deployment matters. You cannot deploy the backend API before the databa
 
 We annotate our `Application` resources with `argocd.argoproj.io/sync-wave`. ArgoCD deploys lower waves first and waits for them to become "Healthy" before moving to the next wave.
 
-- **Wave 1**: Infrastructure & Namespaces
-- **Wave 2**: PostgreSQL Database
-- **Wave 3**: Database Seeding Job (`halan-db-seed`) & Backend API
+- **Wave 1**: Storage & Service Mesh infrastructure (Longhorn, Istio base CRDs, Istiod control plane)
+- **Wave 3**: Application services (PostgreSQL, Backend, Nginx, Infra manifests, DB seed)
 - **Wave 4 & 5**: Observability components (ELK, Prometheus)
 
 ## 🪝 PostSync Hooks (`db-seed`)

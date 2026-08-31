@@ -17,7 +17,6 @@ kubectl port-forward svc/kube-prometheus-grafana -n monitoring 3000:80 > /dev/nu
 kubectl port-forward svc/kube-prometheus-kube-prome-prometheus -n monitoring 9090:9090 > /dev/null 2>&1 &
 kubectl port-forward svc/kube-prometheus-kube-prome-alertmanager -n monitoring 9093:9093 > /dev/null 2>&1 &
 kubectl port-forward svc/kiali -n istio-system 20001:20001 > /dev/null 2>&1 &
-kubectl port-forward svc/tracing -n istio-system 16685:80 > /dev/null 2>&1 &
 kubectl port-forward svc/longhorn-frontend -n longhorn-system 8082:80 > /dev/null 2>&1 &
 
 echo ""
@@ -32,7 +31,6 @@ echo " Grafana        | http://localhost:3000     | admin : admin               
 echo " Prometheus     | http://localhost:9090     | (No Auth)                   "
 echo " Alertmanager   | http://localhost:9093     | (No Auth)                   "
 echo " Kiali          | http://localhost:20001    | (No Auth)                   "
-echo " Jaeger         | http://localhost:16685    | (No Auth)                   "
 echo " Longhorn       | http://localhost:8082     | (No Auth)                   "
 echo "=========================================================================="
 echo ""

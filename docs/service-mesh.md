@@ -1,6 +1,6 @@
 # Service Mesh (Istio) & Tracing
 
-This document outlines the usage of Istio as a Service Mesh within the Halan Internship Project, and how we visualize network traffic using Kiali and Jaeger.
+This document outlines the usage of Istio as a Service Mesh within the Halan Internship Project, and how we visualize network traffic using Kiali.
 
 ## 🕸️ What is a Service Mesh?
 
@@ -41,16 +41,5 @@ kubectl run loadgen --image=busybox -n halan --restart=Never \
 kubectl port-forward --address 0.0.0.0 svc/kiali -n istio-system 20001:20001
 # Open http://localhost:20001
 ```
-*Note: Kiali requires a `PodMonitor` deployed in the cluster to instruct Prometheus to scrape Envoy sidecars. Without this `PodMonitor`, the Kiali graph will be completely empty. Kiali is also configured to pull distributed traces directly from the Jaeger query service.*
+*Note: Kiali requires a `PodMonitor` deployed in the cluster to instruct Prometheus to scrape Envoy sidecars. Without this `PodMonitor`, the Kiali graph will be completely empty.*
 
-## 🕵️ Distributed Tracing (Jaeger)
-
-While Kiali shows you the aggregate flow of traffic, **Jaeger** allows you to trace a *single specific request* as it travels through the entire architecture.
-
-If a user complains that a request to the frontend took 5 seconds, Jaeger can show you a waterfall diagram proving that the frontend took 0.1 seconds, the backend took 0.1 seconds, but the database query took 4.8 seconds.
-
-### Accessing Jaeger
-```bash
-kubectl port-forward --address 0.0.0.0 svc/tracing -n istio-system 16685:80
-# Open http://localhost:16685
-```

@@ -1,6 +1,6 @@
 # Halan Internship Project
 
-A cloud-native, 3-tier enterprise application deployed on Kubernetes using Helm charts, GitOps (ArgoCD), and production-grade observability.
+A cloud-native, 3-tier enterprise application deployed on Kubernetes using Helm charts, GitOps (ArgoCD), and production-grade observability (ELK, Prometheus/Grafana, Istio service mesh).
 
 ## Architecture
 
@@ -20,7 +20,7 @@ halan-internship-project/
 │   ├── argocd.md                    # GitOps workflow, sync waves, and hooks
 │   ├── postgresql.md                # Database state, backups, and idempotency
 │   ├── observability.md             # ELK stack and Prometheus metrics
-│   ├── service-mesh.md              # Istio sidecars, Kiali, and Jaeger tracing
+│   ├── service-mesh.md              # Istio sidecars and Kiali
 │   └── ci-cd.md                     # GitHub Actions and Docker build pipeline
 ├── frontend/                        # Nginx web server + HTML/CSS UI
 ├── backend/                         # Python Flask REST API
@@ -33,16 +33,20 @@ halan-internship-project/
 │       ├── ingress.yaml
 │       ├── cronjob.yaml             # Daily pg_dump backup job
 │       ├── db-backup-pvc.yaml       # PVC for backup storage (Longhorn)
-│       ├── argocd/                  # ArgoCD App of Apps — one file per service
-│       │   ├── halan-infra.yaml     # Manages raw K8s manifests
-│       │   ├── halan-backend.yaml   # Manages custom Flask Helm chart
-│       │   ├── halan-nginx.yaml     # Manages Nginx chart
-│       │   ├── halan-postgres.yaml  # Manages PostgreSQL chart
-│       │   ├── halan-db-seed.yaml   # Manages db-seed Helm chart (PostSync hook)
+│       ├── argocd/                  # ArgoCD Application manifests — one file per service
+│       │   ├── longhorn.yaml        # Longhorn storage (wave 1)
+│       │   ├── istio-base.yaml      # Istio CRDs (wave 1)
+│       │   ├── istiod.yaml          # Istio control plane (wave 1)
+│       │   ├── halan-postgres.yaml  # Manages PostgreSQL chart (wave 3)
+│       │   ├── halan-backend.yaml   # Manages custom Flask Helm chart (wave 3)
+│       │   ├── halan-nginx.yaml     # Manages Nginx chart (wave 3)
+│       │   ├── halan-infra.yaml     # Manages raw K8s manifests (wave 3)
+│       │   ├── halan-db-seed.yaml   # Manages db-seed Helm chart (PostSync hook, wave 3)
 │       │   ├── elasticsearch.yaml   # elastic/elasticsearch 8.5.1 (wave 4)
 │       │   ├── kube-prometheus.yaml # prometheus-community/kube-prometheus-stack (wave 4)
 │       │   ├── kibana.yaml          # elastic/kibana 8.5.1 (wave 5)
-│       │   └── fluent-bit.yaml      # Fluent Bit DaemonSet (wave 5)
+│       │   ├── fluent-bit.yaml      # Fluent Bit DaemonSet (wave 5)
+│       │   └── kiali.yaml           # Kiali service mesh dashboard
 │       ├── config/
 │       │   ├── backend-config.yaml  # Non-sensitive ConfigMap
 │       │   └── secrets.yaml         # DB credentials (use Vault/Sealed Secrets in prod)
@@ -60,7 +64,10 @@ halan-internship-project/
 │           ├── elasticsearch/       # elasticsearch-values.yaml
 │           ├── kibana/              # kibana-values.yaml
 │           ├── fluent-bit/          # fluent-bit-values.yaml
-│           └── kube-prometheus/     # kube-prometheus-values.yaml
+│           ├── kube-prometheus/     # kube-prometheus-values.yaml
+│           ├── istiod/              # istiod-values.yaml
+│           ├── longhorn/            # longhorn-values.yaml
+│           └── kiali/               # kiali-values.yaml
 ├── docker-compose.yml               # Local development environment
 └── .env.example                     # Required environment variable reference
 ```
@@ -138,11 +145,11 @@ helm install argocd argo/argo-cd --create-namespace --namespace argocd
 # Wait for ArgoCD pods
 kubectl get pods -n argocd -w
 
-# Hand over to ArgoCD — it deploys everything else from Git
+# Apply all ArgoCD Application manifests — each app manages its own service
 kubectl apply -f argocd/
 ```
 
-ArgoCD reads the App of Apps manifests and automatically deploys all services in sync-wave order.
+ArgoCD picks up each `Application` manifest and syncs the corresponding service in sync-wave order. Each file in `argocd/` is an independent `Application` resource applied directly — there is no App of Apps parent wrapper.
 
 > **DB seeding** is handled automatically by the `halan-db-seed` ArgoCD Application.
 > It runs a one-shot Kubernetes Job as a PostSync hook — no manual `kubectl apply` needed.
@@ -191,7 +198,6 @@ kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443
 | **Grafana** | `monitoring` | Metrics Dashboards | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-stack-grafana -n monitoring 3000:80` | 3000 |
 | **Alertmanager** | `monitoring` | Alert Routing | `kubectl port-forward --address 0.0.0.0 svc/kube-prometheus-stack-alertmanager -n monitoring 9093:9093` | 9093 |
 | **Kiali** | `istio-system` | Service Mesh Topology | `kubectl port-forward --address 0.0.0.0 svc/kiali -n istio-system 20001:20001` | 20001 |
-| **Jaeger** | `istio-system` | Distributed Tracing | `kubectl port-forward --address 0.0.0.0 svc/tracing -n istio-system 16686:80` | 16686 |
 | **Longhorn** | `longhorn-system` | Storage Management | `kubectl port-forward --address 0.0.0.0 svc/longhorn-frontend -n longhorn-system 8080:80` | 8080 |
 
 ---
@@ -324,9 +330,9 @@ This project was built for an internship to demonstrate deep architectural knowl
 - [x] **Phase 10**: Persistent Volumes (PostgreSQL StatefulSet + PVC)
 - [x] **Phase 11**: Jobs & CronJobs
 - [x] **Phase 12**: Ingress (L7 routing)
-- [x] **Phase 13**: ArgoCD GitOps — App of Apps pattern, multi-source Helm, automated image tag updates
+- [x] **Phase 13**: ArgoCD GitOps — multi-app declarative deployment, multi-source Helm, automated image tag updates
 - [x] **Phase 14**: ELK Stack (Elasticsearch + Kibana + Fluent Bit)
-- [x] **Phase 15**: Service Mesh (Istio + Kiali + Jaeger distributed tracing)
+- [x] **Phase 15**: Service Mesh (Istio + Kiali)
 - [x] **Phase 16**: Prometheus & Grafana observability (kube-prometheus-stack)
 - [x] **Phase 17**: DB seeding via Helm PostSync hook — DRY, idempotent, ArgoCD-native
 - [x] **Phase 18**: Daily pg_dump backup CronJob with Longhorn-backed PVC
